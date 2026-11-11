@@ -1,5 +1,7 @@
 # Meridian example environment (.venv-meridian). Kept separate from requirements-dev.txt.
-# CPU install; for GPU (Colab) use google-meridian[and-cuda]==2.2.0 instead.
-google-meridian==2.2.0
+# CPU install; for GPU (Colab) use google-meridian[and-cuda,schema]==2.2.0 instead.
+# The schema extra provides save_meridian/load_meridian, used to share the fitted model.
+google-meridian[schema]==2.2.0
 duckdb
 pandas
+matplotlib

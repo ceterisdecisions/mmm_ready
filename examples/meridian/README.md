@@ -2,14 +2,19 @@
 
 An end-to-end check that `mmm_input_weekly` can be loaded straight into
 [Meridian](https://developers.google.com/meridian). It fits a geo-level model on the
-synthetic data and compares the estimated ROI per `mmm_channel` against
-`ground_truth.json`.
+synthetic data and compares what Meridian estimates with `ground_truth.json`, by
+`mmm_channel`. Each step is a separate script:
+
+| Script | What it does | Output (`output/`, gitignored) |
+|---|---|---|
+| `run_meridian.py` | Fits the model, compares ROI, saves the fit | `model.binpb`, `roi_comparison.csv` |
+| `response_curves.py` | Compares response curves, saturation, adstock and marginal ROI | `plots/*.png`, `response_curves_comparison.csv`, `mroi_comparison.csv`, `adstock_comparison.csv` |
+
+The later scripts load `model.binpb`, so only `run_meridian.py` pays the sampling cost.
 
 This is an example, not a test, so CI does not run it.
 
-## What the script does
-
-`run_meridian.py`:
+## Fitting and ROI: `run_meridian.py`
 
 1. Reads `mmm_input_weekly` from `integration_tests/mmm_ready_dev.duckdb` (opened read-only).
 2. Loads it into Meridian at geo level:
@@ -24,7 +29,8 @@ This is an example, not a test, so CI does not run it.
    `sum(contribution) / sum(spend)` per channel. For example, `social_prospecting` combines
    Meta and TikTok.
 5. Prints the true ROI next to the posterior mean and the 90% credible interval, then writes
-   `output/roi_comparison.csv` (gitignored).
+   `output/roi_comparison.csv`.
+6. Saves the fitted model to `output/model.binpb` with `save_meridian`.
 
 ### Options
 
@@ -40,6 +46,32 @@ This is an example, not a test, so CI does not run it.
 control that is identical in every geo, such as `holiday_days` here, is then perfectly
 collinear with the time effects, and Meridian refuses to build the model. Using fewer knots
 keeps the holiday control identifiable.
+
+## Curves, saturation, adstock and mROI: `response_curves.py`
+
+The truth comes from `ground_truth.json` → `response_curves`, which the generator writes per
+`mmm_channel`. Both sides use Meridian's definition of a response curve: scale the channel's
+spend by a multiplier on every day and geo, keep the flighting pattern, and sum the incremental
+revenue. The x-axis is always the multiplier (1 = historical spend). That keeps the two curves
+aligned even though Meridian only sees the weeks kept in `mmm_input_weekly`.
+
+| Plot (`output/plots/`) | Meridian | Truth |
+|---|---|---|
+| `response_curves.png` | `Analyzer.response_curves()`, mean and 90% CI | dense curve, 0–2× |
+| `saturation_normalized.png` | same curves divided by their value at 100%, to compare shape rather than level | same |
+| `mroi.png` | `Analyzer.marginal_roi(incremental_increase=0.01)` | forward difference at +1% |
+| `adstock.png` | `Analyzer.adstock_decay()`, weight αˡ by weekly lag | daily geometric decay converted to weekly lags, scaled so lag 0 = 1 |
+| `hill_curves.png` | `Analyzer.hill_curves()` with the histogram of historical media | not shown (see below) |
+
+The console also prints incremental revenue at 50/75/100/125/150% of spend and the mROI
+table with interval coverage.
+
+**Why Hill parameters aren't compared directly:** Meridian applies Hill to impressions per
+geo-week, scaled by its own median. The generator applies it to daily adstocked spend
+divided by the historical mean. The two `k`/`s` pairs live on different axes, so saturation
+is compared by curve shape (`saturation_normalized.png`) instead.
+The adstock comparison is likewise an approximation, because the truth saturates daily and
+Meridian weekly.
 
 ## Run locally (CPU)
 
@@ -62,9 +94,11 @@ python3.12 -m venv .venv-meridian
 
 # 3. Quick smoke run (about 1-2 minutes on a laptop CPU)
 .venv-meridian/bin/python examples/meridian/run_meridian.py
-
-# Full run (much slower on CPU; a GPU is recommended)
+#    or a full run (much slower on CPU; a GPU is recommended)
 .venv-meridian/bin/python examples/meridian/run_meridian.py --full
+
+# 4. Curves on the saved model (seconds)
+.venv-meridian/bin/python examples/meridian/response_curves.py
 ```
 
 On macOS with the python.org installer, if `pip install` fails with
@@ -90,12 +124,19 @@ Choose **Runtime → Change runtime type → GPU** (a T4 is enough), then run th
 ```
 
 ```python
-!pip install -q "google-meridian[and-cuda]==2.2.0" duckdb
+!pip install -q "google-meridian[and-cuda,schema]==2.2.0" duckdb matplotlib
 import jax; print(jax.devices())   # should list a CUDA device
 ```
 
 ```python
 !python examples/meridian/run_meridian.py --full
+!python examples/meridian/response_curves.py
+```
+
+```python
+from IPython.display import Image, display
+for name in ["response_curves", "saturation_normalized", "mroi", "adstock", "hill_curves"]:
+    display(Image(f"examples/meridian/output/plots/{name}.png"))
 ```
 
 If pip reports dependency conflicts with packages that come preinstalled in Colab, restart
@@ -110,7 +151,10 @@ distort the comparison in predictable ways, and that is the point of the example
 
 - **`tv` vs `video_online`:** YouTube spend is generated as a function of TV
   (`flag_collinear` in the readiness report). The model can't split credit between them, so
-  expect wide or swapped ROIs for these two channels.
+  expect wide or swapped ROIs, curves and mROIs for these two channels. Typically
+  `video_online` comes out too high and `tv` too low.
+- **S-shaped truth:** TV has the steepest true Hill curve (`s = 2.2`), so its true response is
+  S-shaped at low multipliers. Meridian's default prior favours concave curves.
 - **`unmapped`:** Pinterest is missing from the taxonomy. Its spend is excluded and its
   (small) true effect is absorbed by the baseline. It appears in the table with a true ROI
   but no estimate.

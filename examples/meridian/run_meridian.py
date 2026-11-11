@@ -5,6 +5,8 @@ Reads mmm_input_weekly from the integration_tests DuckDB database, fits a geo-le
 Meridian model (revenue KPI, impressions_* as media, spend_* as media spend,
 avg_price / promo_days / holiday_days as controls) and compares the estimated ROI
 per mmm_channel against ground_truth.json, aggregated through the channel taxonomy.
+The fitted model is saved to output/model.binpb for response_curves.py and
+optimize_budget.py, so they don't have to refit.
 
 This is an example, not a test: it is not run in CI.
 
@@ -13,20 +15,18 @@ Usage (from the repo root, after `dbt build` in integration_tests/):
     python examples/meridian/run_meridian.py --full     # full sampling (use a GPU)
 """
 import argparse
-import json
 import sys
 import time
 from pathlib import Path
 
 import duckdb
-import numpy as np
 import pandas as pd
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+from common import (DEFAULT_OUT, DEFAULT_TRUTH, MODEL_FILE, REPO_ROOT, add_coverage, load_truth, print_table,
+                    summarize_draws)
+
 DEFAULT_DB = REPO_ROOT / "integration_tests" / "mmm_ready_dev.duckdb"
-DEFAULT_TRUTH = REPO_ROOT / "integration_tests" / "ground_truth.json"
 DEFAULT_TAXONOMY = REPO_ROOT / "seeds" / "channel_taxonomy.csv"
-DEFAULT_OUT = Path(__file__).resolve().parent / "output"
 
 CONTROLS = ["avg_price", "promo_days", "holiday_days"]
 # Sampling presets: (n_chains, n_adapt, n_burnin, n_keep, n_prior)
@@ -42,7 +42,7 @@ def parse_args():
     p.add_argument("--table", default="mmm_input_weekly", help="table to read (default: mmm_input_weekly)")
     p.add_argument("--ground-truth", type=Path, default=DEFAULT_TRUTH)
     p.add_argument("--taxonomy", type=Path, default=DEFAULT_TAXONOMY)
-    p.add_argument("--out", type=Path, default=DEFAULT_OUT, help="directory for the ROI comparison CSV")
+    p.add_argument("--out", type=Path, default=DEFAULT_OUT, help="directory for the saved model and CSVs")
     p.add_argument("--full", action="store_true", help="use the full sampling preset instead of the quick one")
     p.add_argument("--chains", type=int, help="override number of MCMC chains")
     p.add_argument("--n-adapt", type=int, help="override adaptation steps per chain")
@@ -109,9 +109,7 @@ def build_input_data(df: pd.DataFrame, channels: list[str]):
 
 def true_roi_by_channel(truth_path: Path, taxonomy_path: Path) -> pd.DataFrame:
     """Aggregate ground_truth.json (keyed by platform/campaign_type) to mmm_channel."""
-    if not truth_path.exists():
-        sys.exit(f"{truth_path} not found. Run scripts/generate_synthetic_data.py first.")
-    truth = json.loads(truth_path.read_text())["channels"]
+    truth = load_truth(truth_path)["channels"]
     taxonomy = pd.read_csv(taxonomy_path)
     mapping = {f"{r.platform}/{r.campaign_type}": r.mmm_channel for r in taxonomy.itertuples()}
 
@@ -154,32 +152,25 @@ def main():
     mmm.sample_posterior(n_chains=n_chains, n_adapt=n_adapt, n_burnin=n_burnin, n_keep=n_keep, seed=args.seed)
     print(f"Sampling done in {time.time() - t0:.0f}s")
 
+    from meridian.schema.serde import meridian_serde
+
+    args.out.mkdir(parents=True, exist_ok=True)
+    meridian_serde.save_meridian(mmm, str(args.out / MODEL_FILE))
+    print(f"Saved fitted model to {args.out / MODEL_FILE}")
+
     an = analyzer.Analyzer(model_context=mmm.model_context, inference_data=mmm.inference_data)
-    roi = np.asarray(an.roi())  # (chains, draws, channels)
-    draws = roi.reshape(-1, roi.shape[-1])
-    model_channels = list(input_data.media_channel.values)
-    est = pd.DataFrame({
-        "mmm_channel": model_channels,
-        "roi_mean": draws.mean(axis=0),
-        "roi_p05": np.quantile(draws, 0.05, axis=0),
-        "roi_p95": np.quantile(draws, 0.95, axis=0),
-    })
+    est = summarize_draws(an.roi(), input_data.media_channel.values, "roi")  # unmapped is not in the model
 
     truth = true_roi_by_channel(args.ground_truth, args.taxonomy)
     cmp = truth[["mmm_channel", "true_roi"]].merge(est, on="mmm_channel", how="outer")
-    in_ci = (cmp["true_roi"] >= cmp["roi_p05"]) & (cmp["true_roi"] <= cmp["roi_p95"])
-    cmp["in_90ci"] = in_ci.astype("boolean").mask(cmp["roi_mean"].isna())  # unmapped is not in the model
-    cmp = cmp.sort_values("mmm_channel").reset_index(drop=True)
+    cmp = add_coverage(cmp, "true_roi", "roi").sort_values("mmm_channel").reset_index(drop=True)
 
     rhat = an.rhat_summary()
     max_rhat = float(rhat["max_r_hat"].max())
 
-    pd.set_option("display.width", 120)
-    print("\nROI per mmm_channel (estimated vs ground truth):")
-    print(cmp.to_string(index=False, float_format=lambda x: f"{x:.3f}"))
+    print_table("ROI per mmm_channel (estimated vs ground truth):", cmp)
     print(f"\nMax R-hat across parameters: {max_rhat:.2f} (quick runs rarely converge; use --full for real numbers)")
 
-    args.out.mkdir(parents=True, exist_ok=True)
     out_file = args.out / "roi_comparison.csv"
     cmp.to_csv(out_file, index=False)
     print(f"Written {out_file}")
