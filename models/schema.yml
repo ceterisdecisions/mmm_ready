@@ -25,7 +25,10 @@ models:
             columns: [date_day, geo]
 
   - name: mmm_input_weekly
-    description: Wide week x geo table ready for MMM.
+    description: >
+      Wide week x geo table ready for MMM. One spend/impressions column per channel with
+      spend (all taxonomy channels with mmm_ready_pivot_all_channels). Partial first/last
+      weeks are dropped unless mmm_ready_drop_partial_weeks is false.
     tests:
       - mmm_ready.unique_combination:
           arguments:

@@ -7,7 +7,8 @@ that data is fit for modeling.
 ## What it does
 - `fct_marketing_spend_daily`: daily spend by geo and MMM channel, mapped with a canonical taxonomy.
 - `fct_outcomes_daily`: daily KPI with price, promotions and holidays.
-- `mmm_input_weekly`: wide week × geo table, with one spend and one impressions column per channel.
+- `mmm_input_weekly`: wide week × geo table, with one spend and one impressions column per channel with spend
+  (partial edge weeks dropped, see [Cleaning `mmm_input_weekly`](#cleaning-mmm_input_weekly)).
 - `mmm_readiness_report`: per channel, `ready` / `review` / `blocked` (history length, gaps, unmapped spend,
   sparse channels, low variance, spikes, collinearity).
 - `mmm_channel_correlations`: spend correlation between channel pairs.
@@ -45,7 +46,7 @@ Spend with no match lands in `unmapped`, and the readiness report blocks it abov
 | column | meaning |
 |---|---|
 | `platform`, `campaign_type` | join key against the raw spend data (lowercased); must be unique |
-| `mmm_channel` | MMM channel; becomes the `spend_<channel>` / `impressions_<channel>` columns in `mmm_input_weekly` |
+| `mmm_channel` | MMM channel; becomes the `spend_<channel>` / `impressions_<channel>` columns in `mmm_input_weekly` (only if it has spend, unless `mmm_ready_pivot_all_channels`) |
 | `channel_group` | channel family |
 | `demand_capture` | `true` if the channel mainly captures existing demand rather than creating it |
 
@@ -81,6 +82,26 @@ Channels flagged `true` (brand search, retargeting, retail media, affiliate) mos
 demand that other channels or the brand already created, so an MMM tends to over-credit them.
 Use the flag to give them tighter priors or to report them separately. The flag reaches
 `fct_marketing_spend_daily`, where it is `null` for `unmapped` spend because that spend's role is unknown.
+
+## Cleaning `mmm_input_weekly`
+Two vars control how the MMM input table is trimmed:
+
+| var | default | effect |
+|---|---|---|
+| `mmm_ready_drop_partial_weeks` | `true` | Drops the first and the last week when they have fewer than 7 days of outcomes. Days are counted across the whole panel, so every geo keeps the same weeks. Gaps in the middle of the series are not dropped: the readiness report blocks them (`flag_kpi_gaps`). |
+| `mmm_ready_pivot_all_channels` | `false` | By default only channels with total spend > 0 get `spend_<channel>` / `impressions_<channel>` columns, so the MMM never sees all-zero columns. Set it to `true` to get one column per taxonomy channel. `spend_unmapped` is always present. |
+
+```yaml
+vars:
+  mmm_ready_drop_partial_weeks: false
+  mmm_ready_pivot_all_channels: true
+```
+
+The set of channel columns now depends on the data: a channel with spend gains a column on the next
+build. If a downstream job expects a fixed schema, set `mmm_ready_pivot_all_channels: true`.
+Which edge weeks are partial depends on the warehouse's week start (see Notes).
+
+The readiness report always reads the full, untrimmed data.
 
 ## Notes
 - Week: the warehouse's `date_trunc('week')` is used; the week start may vary (BigQuery starts on Sunday).
