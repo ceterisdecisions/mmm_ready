@@ -21,6 +21,7 @@ vars:
   mmm_ready_max_spike_ratio: 5        # max week / mean
   mmm_ready_max_corr: 0.8             # collinearity between channels
   mmm_ready_max_unmapped_share: 0.02  # tolerated share of unmapped spend
+  mmm_ready_drop_partial_weeks: true  # drop first/last week of mmm_input_weekly if < 7 days of outcomes
 
 models:
   mmm_ready:
