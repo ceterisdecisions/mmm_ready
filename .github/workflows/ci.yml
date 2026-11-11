@@ -17,3 +17,5 @@ jobs:
       - run: dbt deps
       - run: dbt seed
       - run: dbt build
+      - name: dbt build (non-default cleanup vars)
+        run: "dbt build --vars '{mmm_ready_drop_partial_weeks: false, mmm_ready_pivot_all_channels: true}'"
