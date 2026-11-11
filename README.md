@@ -24,6 +24,8 @@ dbt deps && dbt seed && dbt build
 ```
 The synthetic data comes with deliberately seeded issues (see `ground_truth.json`); the readiness report should detect them.
 
+To fit a model on the result, see the Meridian smoke test in [`examples/meridian/`](examples/meridian/README.md). It loads `mmm_input_weekly` into Meridian and compares the estimated ROI with the ground truth.
+
 ## Using it with your data
 Your source tables need these columns:
 - `ad_spend_daily`: date, geo, platform, campaign_type, spend, impressions, clicks
