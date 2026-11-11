@@ -1,7 +1,7 @@
--- Diagnóstico por canal: ¿son estos datos aptos para un MMM?
--- blocked: inversión sin mapear, histórico corto o semanas sin KPI.
--- review:  huecos de una plataforma (pérdida de datos o flighting: confírmalo),
---          canal escaso, poca variación, picos o colinealidad.
+-- Per-channel diagnostic: is this data fit for an MMM?
+-- blocked: unmapped spend, short history or weeks without KPI.
+-- review:  platform gaps (data loss or flighting: confirm which),
+--          sparse channel, low variance, spikes or collinearity.
 with weekly as (
     select week_start, mmm_channel, sum(spend) as spend
     from {{ ref('int_mmm__spend_weekly') }}
@@ -33,7 +33,7 @@ totals as (
     select sum(spend) as total_spend from weekly
 ),
 
--- Huecos por plataforma: semanas sin filas entre su primera y última semana activa
+-- Per-platform gaps: weeks with no rows between its first and last active week
 platform_gaps as (
     select
         mmm_channel,
@@ -90,7 +90,7 @@ checks as (
         s.max_weekly_spend / nullif(s.avg_weekly_spend, 0)             as spike_ratio,
         coalesce(k.max_abs_corr, 0)                                    as max_abs_corr_with_other,
 
-        -- bloqueantes
+        -- blocking
         case when s.mmm_channel = 'unmapped'
               and s.total_spend / nullif(t.total_spend, 0) > {{ var('mmm_ready_max_unmapped_share') }}
              then 1 else 0 end                                         as flag_unmapped_spend,
@@ -98,7 +98,7 @@ checks as (
              then 1 else 0 end                                         as flag_short_history,
         case when kc.kpi_weeks < c.expected_weeks
              then 1 else 0 end                                         as flag_kpi_gaps,
-        -- a revisar
+        -- review
         case when g.gap_weeks > 0 then 1 else 0 end                    as flag_platform_gaps,
         case when 1 - (s.weeks_with_spend * 1.0 / nullif(c.expected_weeks, 0)) > {{ var('mmm_ready_max_zero_week_share') }}
              then 1 else 0 end                                         as flag_sparse,

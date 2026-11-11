@@ -1,4 +1,4 @@
--- Correlación de la inversión semanal (total geos) entre pares de canales.
+-- Weekly spend correlation (all geos combined) between channel pairs.
 with weekly as (
     select week_start, mmm_channel, sum(spend) as spend
     from {{ ref('int_mmm__spend_weekly') }}

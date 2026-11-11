@@ -1,5 +1,5 @@
 {% macro get_mmm_channels() %}
-    {#- Lista de canales MMM distintos de la taxonomía, para el pivot dinámico. -#}
+    {#- List of distinct MMM channels in the taxonomy, for the dynamic pivot. -#}
     {%- if not execute -%}
         {{ return([]) }}
     {%- endif -%}

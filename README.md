@@ -1,18 +1,18 @@
 # mmm_ready
 
-Paquete dbt open source que convierte datos de marketing en una **tabla lista para MMM**
-(Meridian, PyMC-Marketing, Robyn) y en un **diagnóstico de calidad** que dice si esos datos
-sirven para modelar.
+Open source dbt package that turns marketing data into an **MMM-ready table**
+(Meridian, PyMC-Marketing, Robyn) and a **data-quality diagnostic** that tells you whether
+that data is fit for modeling.
 
-## Qué hace
-- `fct_marketing_spend_daily`: inversión diaria por geo y canal MMM, mapeada con una taxonomía canónica.
-- `fct_outcomes_daily`: KPI diario con precio, promociones y festivos.
-- `mmm_input_weekly`: tabla ancha semana × geo, una columna de inversión e impresiones por canal.
-- `mmm_readiness_report`: por canal, `ready` / `review` / `blocked` (histórico, huecos, inversión sin mapear,
-  canales escasos, poca variación, picos, colinealidad).
-- `mmm_channel_correlations`: correlación de inversión entre pares de canales.
+## What it does
+- `fct_marketing_spend_daily`: daily spend by geo and MMM channel, mapped with a canonical taxonomy.
+- `fct_outcomes_daily`: daily KPI with price, promotions and holidays.
+- `mmm_input_weekly`: wide week × geo table, with one spend and one impressions column per channel.
+- `mmm_readiness_report`: per channel, `ready` / `review` / `blocked` (history length, gaps, unmapped spend,
+  sparse channels, low variance, spikes, collinearity).
+- `mmm_channel_correlations`: spend correlation between channel pairs.
 
-## Arranque local (DuckDB, coste cero)
+## Local quickstart (DuckDB, zero cost)
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements-dev.txt
@@ -21,24 +21,24 @@ python ../scripts/generate_synthetic_data.py --out seeds
 export DBT_PROFILES_DIR=.
 dbt deps && dbt seed && dbt build
 ```
-Los datos sintéticos traen errores sembrados a propósito (ver `ground_truth.json`); el informe de readiness debe detectarlos.
+The synthetic data comes with deliberately seeded issues (see `ground_truth.json`); the readiness report should detect them.
 
-## Usarlo con tus datos
-Tus tablas de origen necesitan estas columnas:
+## Using it with your data
+Your source tables need these columns:
 - `ad_spend_daily`: date, geo, platform, campaign_type, spend, impressions, clicks
 - `outcomes_daily`: date, geo, revenue, conversions
 - `controls_daily`: date, geo, avg_price, promo_flag
 
-Apunta a ellas con variables en tu `dbt_project.yml`:
+Point to them with variables in your `dbt_project.yml`:
 ```yaml
 vars:
   mmm_ready_raw_schema: marketing_raw
   mmm_ready_ad_spend_identifier: my_ad_spend_table
 ```
-Y amplía `seeds/channel_taxonomy.csv` con tus plataformas y tipos de campaña.
+Then extend `seeds/channel_taxonomy.csv` with your platforms and campaign types.
 
-## Notas
-- Semana: se usa `date_trunc('week')` del warehouse; el inicio de semana puede variar (BigQuery empieza en domingo).
-- Probado en DuckDB. Databricks y Snowflake: pendiente de validar.
+## Notes
+- Week: the warehouse's `date_trunc('week')` is used; the week start may vary (BigQuery starts on Sunday).
+- Tested on DuckDB. Databricks and Snowflake: not yet validated.
 
-Licencia Apache 2.0.
+Apache 2.0 License.

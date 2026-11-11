@@ -1,5 +1,5 @@
--- Asigna cada fila de inversión a un canal MMM según la taxonomía.
--- Lo que no encuentra mapeo queda como 'unmapped' (lo vigila el diagnóstico).
+-- Maps each spend row to an MMM channel using the taxonomy.
+-- Anything without a match becomes 'unmapped' (tracked by the diagnostics).
 select
     s.date_day,
     s.geo,

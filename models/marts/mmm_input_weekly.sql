@@ -1,6 +1,6 @@
 -- depends_on: {{ ref('channel_taxonomy') }}
--- Tabla ancha semana x geo, lista para Meridian, PyMC-Marketing o Robyn.
--- Una columna de inversión e impresiones por canal MMM (pivot dinámico desde la taxonomía).
+-- Wide week x geo table, ready for Meridian, PyMC-Marketing or Robyn.
+-- One spend and one impressions column per MMM channel (dynamic pivot from the taxonomy).
 {% set channels = mmm_ready.get_mmm_channels() %}
 
 with spend as (
