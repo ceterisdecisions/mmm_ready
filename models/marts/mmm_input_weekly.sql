@@ -1,6 +1,7 @@
 -- depends_on: {{ ref('channel_taxonomy') }}
 -- Wide week x geo table, ready for Meridian, PyMC-Marketing or Robyn.
--- One spend and one impressions column per MMM channel (dynamic pivot from the taxonomy).
+-- One spend and one impressions column per MMM channel with spend > 0 (dynamic pivot,
+-- see get_mmm_channels; mmm_ready_pivot_all_channels forces every taxonomy channel).
 -- With mmm_ready_drop_partial_weeks, the first and last week are dropped when they have
 -- fewer than 7 days of outcomes across the whole panel (all geos share the same weeks).
 {% set channels = mmm_ready.get_mmm_channels() %}
