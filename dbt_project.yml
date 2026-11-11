@@ -1,5 +1,5 @@
 name: 'mmm_ready'
-version: '0.1.0'
+version: '0.2.0'
 config-version: 2
 require-dbt-version: [">=1.7.0", "<2.0.0"]
 
@@ -41,6 +41,7 @@ seeds:
         campaign_type: varchar
         mmm_channel: varchar
         channel_group: varchar
+        demand_capture: boolean
     holidays:
       +column_types:
         holiday_date: date
