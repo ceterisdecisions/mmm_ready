@@ -9,6 +9,7 @@ synthetic data and compares what Meridian estimates with `ground_truth.json`, by
 |---|---|---|
 | `run_meridian.py` | Fits the model, compares ROI, saves the fit | `model.binpb`, `roi_comparison.csv` |
 | `response_curves.py` | Compares response curves, saturation, adstock and marginal ROI | `plots/*.png`, `response_curves_comparison.csv`, `mroi_comparison.csv`, `adstock_comparison.csv` |
+| `optimize_budget.py` | Runs Meridian's budget optimizer and scores it against the true optimum | `plots/budget_allocation.png`, `budget_allocation_comparison.csv`, `budget_summary.csv` |
 
 The later scripts load `model.binpb`, so only `run_meridian.py` pays the sampling cost.
 
@@ -73,6 +74,29 @@ is compared by curve shape (`saturation_normalized.png`) instead.
 The adstock comparison is likewise an approximation, because the truth saturates daily and
 Meridian weekly.
 
+## Budget optimizer: `optimize_budget.py`
+
+1. **Meridian:** `BudgetOptimizer.optimize(fixed_budget=True)` keeps the historical total
+   budget and holds each channel within ±30% of its historical spend, which is Meridian's
+   default. Change the range with `--spend-bounds` (for example `0.5` for ±50%).
+2. **True optimum:** the same problem (same budget, same bounds) solved on the true curves.
+   It uses PCHIP interpolation of the 0–2× grid and SLSQP from several starting points
+   (`--starts`). At the optimum, every channel strictly inside its bounds has the same true
+   marginal ROI.
+3. **Scoring:** the historical allocation, Meridian's recommendation and the true optimum are
+   all evaluated on the **true** curves:
+
+   ```
+   captured = (R_meridian − R_historical) / (R_true_optimum − R_historical)
+   ```
+
+   100% means Meridian found the true optimum, 0% means no gain, and a negative value means
+   its recommendation loses revenue compared with doing nothing. The summary also prints
+   the uplift Meridian *predicted* for its own recommendation, next to the real one.
+
+Allocations are compared as multipliers of historical spend. Unmapped spend (Pinterest) is
+outside the model and stays fixed.
+
 ## Run locally (CPU)
 
 Meridian gets its own virtual environment so its dependencies (JAX, TensorFlow,
@@ -97,8 +121,9 @@ python3.12 -m venv .venv-meridian
 #    or a full run (much slower on CPU; a GPU is recommended)
 .venv-meridian/bin/python examples/meridian/run_meridian.py --full
 
-# 4. Curves on the saved model (seconds)
+# 4. Curves and budget optimizer on the saved model (seconds each)
 .venv-meridian/bin/python examples/meridian/response_curves.py
+.venv-meridian/bin/python examples/meridian/optimize_budget.py
 ```
 
 On macOS with the python.org installer, if `pip install` fails with
@@ -131,11 +156,12 @@ import jax; print(jax.devices())   # should list a CUDA device
 ```python
 !python examples/meridian/run_meridian.py --full
 !python examples/meridian/response_curves.py
+!python examples/meridian/optimize_budget.py
 ```
 
 ```python
 from IPython.display import Image, display
-for name in ["response_curves", "saturation_normalized", "mroi", "adstock", "hill_curves"]:
+for name in ["response_curves", "saturation_normalized", "mroi", "adstock", "hill_curves", "budget_allocation"]:
     display(Image(f"examples/meridian/output/plots/{name}.png"))
 ```
 
@@ -160,6 +186,12 @@ distort the comparison in predictable ways, and that is the point of the example
   but no estimate.
 - **`social_prospecting`:** the ×10 Meta spike in the week of 2024-06-03 and the 3-week
   TikTok gap in September 2024 add noise to this channel.
+- **Optimizer:** with these true curves, the possible gain within ±30% is small (about 1%
+  of incremental revenue), because the true marginal ROIs at historical spend are already
+  close to each other. Any bias in the fitted curves is therefore enough to push the
+  recommendation the wrong way. In particular, the TV/YouTube collinearity makes Meridian
+  move budget from `tv` to `video_online`, the opposite of the true optimum. A quick run
+  usually captures a negative share; judge the optimizer only on a converged `--full` run.
 - **Window mismatch:** the true ROI is computed over the full generated period, but the model
   only sees the weeks kept in `mmm_input_weekly`, which drops partial edge weeks.
 - **Default priors:** the example uses Meridian's default ROI priors and has no calibration.
