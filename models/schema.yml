@@ -1,0 +1,40 @@
+version: 2
+
+models:
+  - name: fct_marketing_spend_daily
+    description: Inversión diaria agregada por geo y canal MMM.
+    tests:
+      - mmm_ready.unique_combination:
+          arguments:
+            columns: [date_day, geo, mmm_channel]
+    columns:
+      - name: date_day
+        tests: [not_null]
+      - name: mmm_channel
+        tests: [not_null]
+
+  - name: fct_outcomes_daily
+    description: KPI diario por geo con variables de control y festivos.
+    tests:
+      - mmm_ready.unique_combination:
+          arguments:
+            columns: [date_day, geo]
+
+  - name: mmm_input_weekly
+    description: Tabla ancha semana x geo lista para MMM.
+    tests:
+      - mmm_ready.unique_combination:
+          arguments:
+            columns: [week_start, geo]
+    columns:
+      - name: revenue
+        tests: [not_null]
+
+  - name: mmm_readiness_report
+    description: >
+      Diagnóstico por canal. readiness_status = ready | review | blocked.
+      blocked: inversión sin mapear, histórico corto o semanas sin KPI.
+      review: huecos por plataforma, canal escaso, poca variación, picos o colinealidad.
+
+  - name: mmm_channel_correlations
+    description: Correlación de inversión semanal entre pares de canales.

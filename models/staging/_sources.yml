@@ -1,0 +1,16 @@
+version: 2
+
+sources:
+  - name: mmm_ready_raw
+    database: "{{ var('mmm_ready_raw_database') or target.database }}"
+    schema: "{{ var('mmm_ready_raw_schema') or target.schema }}"
+    tables:
+      - name: ad_spend_daily
+        identifier: "{{ var('mmm_ready_ad_spend_identifier') }}"
+        description: Inversión diaria por geo, plataforma y tipo de campaña.
+      - name: outcomes_daily
+        identifier: "{{ var('mmm_ready_outcomes_identifier') }}"
+        description: KPI de negocio diario por geo (ingresos, conversiones).
+      - name: controls_daily
+        identifier: "{{ var('mmm_ready_controls_identifier') }}"
+        description: Variables de control diarias por geo (precio, promociones).

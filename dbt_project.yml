@@ -1,0 +1,48 @@
+name: 'mmm_ready'
+version: '0.1.0'
+config-version: 2
+require-dbt-version: [">=1.7.0", "<2.0.0"]
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+test-paths: ["tests"]
+
+vars:
+  mmm_ready_raw_database: null        # por defecto: target.database
+  mmm_ready_raw_schema: null          # por defecto: target.schema
+  mmm_ready_ad_spend_identifier: ad_spend_daily
+  mmm_ready_outcomes_identifier: outcomes_daily
+  mmm_ready_controls_identifier: controls_daily
+  mmm_ready_holiday_country: ES
+  mmm_ready_min_history_weeks: 104    # MMM fiable: >= 2 años
+  mmm_ready_max_zero_week_share: 0.5  # canal con >50% semanas a 0 = poco informativo
+  mmm_ready_min_cv: 0.1               # variación mínima de inversión
+  mmm_ready_max_spike_ratio: 5        # semana máx / media
+  mmm_ready_max_corr: 0.8             # colinealidad entre canales
+  mmm_ready_max_unmapped_share: 0.02  # % inversión sin mapear tolerado
+
+models:
+  mmm_ready:
+    staging:
+      +materialized: view
+    intermediate:
+      +materialized: view
+    marts:
+      +materialized: table
+    diagnostics:
+      +materialized: table
+
+seeds:
+  mmm_ready:
+    channel_taxonomy:
+      +column_types:
+        platform: varchar
+        campaign_type: varchar
+        mmm_channel: varchar
+        channel_group: varchar
+    holidays:
+      +column_types:
+        holiday_date: date
+        country: varchar
+        holiday_name: varchar

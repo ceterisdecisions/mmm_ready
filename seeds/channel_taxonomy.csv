@@ -1,0 +1,9 @@
+platform,campaign_type,mmm_channel,channel_group
+google_ads,search_brand,search_brand,search
+google_ads,search_nonbrand,search_nonbrand,search
+google_ads,pmax,search_nonbrand,search
+meta,prospecting,paid_social,social
+meta,retargeting,paid_social_retargeting,social
+tiktok,prospecting,paid_social,social
+youtube,awareness,online_video,video
+tv,linear,tv,offline

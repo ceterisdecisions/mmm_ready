@@ -1,0 +1,7 @@
+mmm_ready_integration_tests:
+  target: duckdb
+  outputs:
+    duckdb:
+      type: duckdb
+      path: mmm_ready_dev.duckdb
+      threads: 4

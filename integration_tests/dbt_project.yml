@@ -1,0 +1,11 @@
+name: 'mmm_ready_integration_tests'
+version: '0.1.0'
+config-version: 2
+profile: 'mmm_ready_integration_tests'
+
+seed-paths: ["seeds"]
+
+seeds:
+  mmm_ready_integration_tests:
+    +column_types:
+      date: date

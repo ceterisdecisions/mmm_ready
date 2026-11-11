@@ -1,0 +1,8 @@
+target/
+dbt_packages/
+logs/
+*.duckdb
+*.duckdb.wal
+.venv/
+integration_tests/seeds/*.csv
+integration_tests/ground_truth.json
