@@ -1,0 +1,20 @@
+version: 2
+
+seeds:
+  - name: channel_taxonomy
+    description: >
+      Maps (platform, campaign_type) to an MMM channel. mmm_channel follows the
+      family_qualifier convention documented in the README.
+    tests:
+      - mmm_ready.unique_combination:
+          arguments:
+            columns: [platform, campaign_type]
+    columns:
+      - name: mmm_channel
+        tests: [not_null]
+      - name: channel_group
+        description: Channel family (search, social, video, display, retail_media, audio, ooh, affiliate).
+        tests: [not_null]
+      - name: demand_capture
+        description: True if the channel mainly captures existing demand rather than creating it.
+        tests: [not_null]

@@ -12,6 +12,10 @@ models:
         tests: [not_null]
       - name: mmm_channel
         tests: [not_null]
+      - name: demand_capture
+        description: >
+          True if the channel mainly captures existing demand (brand search, retargeting,
+          retail media, affiliate) rather than creating it. Null for 'unmapped' spend.
 
   - name: fct_outcomes_daily
     description: Daily KPI by geo with control variables and holidays.
