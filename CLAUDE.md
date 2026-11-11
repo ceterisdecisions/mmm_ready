@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-`mmm_ready` is a dbt **package** (not a standalone project) that turns raw marketing data into a wide weekly table ready for Marketing Mix Modeling (Meridian, PyMC-Marketing, Robyn), plus a data-quality diagnostic (`mmm_readiness_report`) that labels each channel `ready` / `review` / `blocked`. Docs, comments and model descriptions are written in Spanish — keep that convention.
+`mmm_ready` is a dbt **package** (not a standalone project) that turns raw marketing data into a wide weekly table ready for Marketing Mix Modeling (Meridian, PyMC-Marketing, Robyn), plus a data-quality diagnostic (`mmm_readiness_report`) that labels each channel `ready` / `review` / `blocked`. The whole repo is in English: docs, code comments, model/source descriptions, log messages and commit messages — keep that convention. (Seed data values such as Spanish holiday names are data, not prose, and stay as-is.)
 
 The root has no `profiles.yml`/profile; it's consumed by other projects. Development and CI run through `integration_tests/`, a separate dbt project that installs the package via `packages.yml` (`local: ../`) and runs on DuckDB.
 
