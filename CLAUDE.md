@@ -23,7 +23,7 @@ The root has no `profiles.yml`/profile; it's consumed by other projects. Develop
 All dbt commands run from `integration_tests/` with `DBT_PROFILES_DIR=.`:
 
 ```bash
-python -m venv .venv && source .venv/bin/activate
+python3.12 -m venv .venv && source .venv/bin/activate
 pip install -r requirements-dev.txt
 cd integration_tests
 python ../scripts/generate_synthetic_data.py --out seeds   # optional: --seed 42

@@ -4,6 +4,8 @@ logs/
 *.duckdb
 *.duckdb.wal
 .venv/
+.venv-meridian/
+examples/meridian/output/
 integration_tests/seeds/*.csv
 integration_tests/ground_truth.json
 .DS_Store

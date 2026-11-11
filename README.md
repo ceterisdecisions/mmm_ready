@@ -15,7 +15,7 @@ that data is fit for modeling.
 
 ## Local quickstart (DuckDB, zero cost)
 ```bash
-python -m venv .venv && source .venv/bin/activate
+python3.12 -m venv .venv && source .venv/bin/activate
 pip install -r requirements-dev.txt
 cd integration_tests
 python ../scripts/generate_synthetic_data.py --out seeds
