@@ -52,10 +52,11 @@ Spend with no match lands in `unmapped`, and the readiness report blocks it abov
 
 ### Naming convention
 - `mmm_channel` is `snake_case` and follows `family_qualifier` when a family has several
-  variants: `search_brand`, `social_prospecting`, `video_online`, `display_programmatic`, `audio_digital`.
+  variants: `search_brand`, `social_prospecting`, `video_online`, `display_programmatic`, `audio_digital`,
+  `ai_assistant`.
 - A channel that is its own family, or that has an established industry name, keeps that single
   name: `tv`, `ctv`, `radio`, `ooh`, `affiliate`, `retail_media`, `performance_max`.
-- `channel_group` is the family: `search`, `social`, `video`, `display`, `retail_media`, `audio`, `ooh`, `affiliate`.
+- `channel_group` is the family: `search`, `social`, `video`, `display`, `retail_media`, `audio`, `ooh`, `affiliate`, `ai`.
 - Renaming a channel renames its columns in `mmm_input_weekly`, so treat it as a breaking change.
 
 ### Channels
@@ -76,6 +77,14 @@ Spend with no match lands in `unmapped`, and the readiness report blocks it abov
 | radio | audio | false | radio / broadcast |
 | ooh | ooh | false | ooh / classic, digital |
 | affiliate | affiliate | true | affiliate / network |
+| ai_assistant | ai | false | openai / chatgpt_ads; perplexity / sponsored |
+
+### Ads in AI search answers
+`ai_assistant` covers ads bought directly on AI assistants (ChatGPT, Perplexity). Google's ads in
+AI Overviews and AI Mode are not a separate buy: they are served from existing Google Ads campaigns
+(Search, Shopping, Performance Max) and their spend cannot be split out from those campaigns. That spend
+therefore stays in `search_brand`, `search_nonbrand`, `search_shopping` and `performance_max`, not in
+`ai_assistant`.
 
 ### `demand_capture`
 Channels flagged `true` (brand search, retargeting, retail media, affiliate) mostly harvest

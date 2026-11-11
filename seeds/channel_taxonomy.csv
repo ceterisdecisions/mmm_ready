@@ -26,3 +26,5 @@ radio,broadcast,radio,audio,false
 ooh,classic,ooh,ooh,false
 ooh,digital,ooh,ooh,false
 affiliate,network,affiliate,affiliate,true
+openai,chatgpt_ads,ai_assistant,ai,false
+perplexity,sponsored,ai_assistant,ai,false

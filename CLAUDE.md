@@ -50,7 +50,8 @@ Layered pipeline (`models/`): `staging` (views) → `intermediate` (views) → `
 - **Channel mapping** (`int_mmm__spend_mapped`): left-joins spend on `(platform, campaign_type)` to the `channel_taxonomy` seed; anything unmatched becomes `mmm_channel = 'unmapped'`. Everything downstream keys off `mmm_channel`, and `unmapped` is a deliberate sentinel tracked by the diagnostics.
 - **Taxonomy conventions** (`seeds/channel_taxonomy.csv`, full channel table in the README):
   - `mmm_channel` is `snake_case`, `family_qualifier` when a family has several variants (`search_brand`, `social_prospecting`, `video_online`); a channel that is its own family or has an established industry name keeps a single name (`tv`, `ctv`, `radio`, `ooh`, `affiliate`, `retail_media`, `performance_max`).
-  - `channel_group` is the family: `search`, `social`, `video`, `display`, `retail_media`, `audio`, `ooh`, `affiliate`.
+  - `channel_group` is the family: `search`, `social`, `video`, `display`, `retail_media`, `audio`, `ooh`, `affiliate`, `ai`.
+  - `ai_assistant` is only for ads bought directly on AI assistants (openai, perplexity). Google ads in AI Overviews / AI Mode run inside Google Ads campaigns and can't be split out, so they stay in the search channels and `performance_max`; don't map them to `ai_assistant`.
   - `demand_capture` (boolean, type pinned in the root `dbt_project.yml`) is `true` for channels that mainly harvest existing demand: `search_brand`, `social_retargeting`, `retail_media`, `affiliate`. It flows through `int_mmm__spend_mapped` to `fct_marketing_spend_daily` and is `null` for `unmapped`.
   - `(platform, campaign_type)` must be unique, or the join fans out and duplicates spend.
   - Renaming a channel renames `mmm_input_weekly` columns: treat it as a breaking change and bump the package version.

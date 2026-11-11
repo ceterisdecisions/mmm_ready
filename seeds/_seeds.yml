@@ -13,7 +13,7 @@ seeds:
       - name: mmm_channel
         tests: [not_null]
       - name: channel_group
-        description: Channel family (search, social, video, display, retail_media, audio, ooh, affiliate).
+        description: Channel family (search, social, video, display, retail_media, audio, ooh, affiliate, ai).
         tests: [not_null]
       - name: demand_capture
         description: True if the channel mainly captures existing demand rather than creating it.
