@@ -19,3 +19,11 @@ jobs:
       - run: dbt build
       - name: dbt build (non-default cleanup vars)
         run: "dbt build --vars '{mmm_ready_drop_partial_weeks: false, mmm_ready_pivot_all_channels: true}'"
+      # MCP server tests run after dbt so the seeded-issues test sees the built DuckDB.
+      # Separate venv: the MCP SDK pulls web dependencies we keep out of the dbt env.
+      - name: MCP server tests
+        working-directory: .
+        run: |
+          python -m venv .venv-mcp
+          .venv-mcp/bin/pip install -r mcp_server/requirements.txt
+          .venv-mcp/bin/python -m pytest mcp_server/tests -v
