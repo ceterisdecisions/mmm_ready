@@ -24,6 +24,10 @@ Recommended action per flag:
 Low variance and collinearity are not data errors: the data simply cannot identify the effect, so the
 fix is a lift or geo experiment used as a prior or for calibration.
 
+For collinear channels, `channel_readiness` also reads `mmm_channel_correlations` and names the
+partner channel(s) with their correlation (`collinear_with` field and in the explanation). If that
+table is missing, the explanation falls back to "another channel".
+
 ## Setup
 
 The server has its own virtualenv: the MCP SDK brings web dependencies (starlette, uvicorn, httpx...)

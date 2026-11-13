@@ -50,6 +50,11 @@ def db(tmp_path):
         + ") t(" + ", ".join(cols) + ")",
         [v for r in rows for v in r.values()],
     )
+    con.execute(
+        "create table mmm_channel_correlations as select * from (values "
+        "('search_brand', 'tv', 0.97, 1), ('social_prospecting', 'tv', 0.50, 0)"
+        ") t(channel_a, channel_b, spend_correlation, is_collinear)"
+    )
     con.close()
     return path
 
@@ -87,6 +92,25 @@ def test_channel_readiness_explains_and_recommends(db):
 def test_action_categories(db, channel, issue, action):
     issues = readiness.channel_readiness(channel, db)["issues"]
     assert [(i["issue"], i["recommended_action"]) for i in issues] == [(issue, action)]
+
+
+def test_collinear_names_the_partner_channel(db):
+    r = readiness.channel_readiness("tv", db)
+    assert r["collinear_with"] == [{"channel": "search_brand", "correlation": 0.97}]
+    (issue,) = r["issues"]
+    assert "search_brand (correlation 0.97)" in issue["explanation"]
+    assert "tv and search_brand" in issue["next_step"]
+    # Pairs below the collinearity threshold are not listed.
+    assert "social_prospecting" not in issue["explanation"]
+
+
+def test_collinear_falls_back_without_correlations_table(db):
+    con = duckdb.connect(str(db))
+    con.execute("drop table mmm_channel_correlations")
+    con.close()
+    r = readiness.channel_readiness("tv", db)
+    assert r["collinear_with"] == []
+    assert "another channel (correlation 0.97)" in r["issues"][0]["explanation"]
 
 
 def test_ready_channel_has_no_issues(db):
@@ -141,4 +165,5 @@ def test_seeded_issues_on_synthetic_data():
     gaps = readiness.channel_readiness("social_prospecting")["issues"]
     assert any(i["issue"] == "platform_gaps" and "tiktok" in i["explanation"] for i in gaps)  # TikTok gap
     assert "collinear" in issues("video_online") and "collinear" in issues("tv")  # YouTube ~ TV
+    assert [p["channel"] for p in readiness.channel_readiness("tv")["collinear_with"]] == ["video_online"]
     assert readiness.readiness_summary()["ready_for_modeling"] is False

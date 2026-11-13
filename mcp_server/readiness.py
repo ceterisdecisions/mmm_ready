@@ -16,6 +16,7 @@ DEFAULT_DB_PATH = REPO_ROOT / "integration_tests" / "mmm_ready_dev.duckdb"
 DB_PATH_ENV = "MMM_READY_DUCKDB_PATH"
 SCHEMA_ENV = "MMM_READY_SCHEMA"
 TABLE = "mmm_readiness_report"
+CORRELATIONS_TABLE = "mmm_channel_correlations"
 
 FIX_DATA = "fix the data"
 REVIEW = "review"
@@ -96,10 +97,18 @@ def _explain_spike(r: dict) -> tuple[str, str]:
 
 
 def _explain_collinear(r: dict) -> tuple[str, str]:
+    partners = r.get("collinear_with") or []
+    if partners:
+        names = ", ".join(f"{p['channel']} (correlation {_num(p['correlation'])})" for p in partners)
+        lead = f"Spend moves almost in lockstep with {names}. "
+        other = " and ".join([r["mmm_channel"], *(p["channel"] for p in partners)])
+    else:
+        lead = (f"Spend moves almost in lockstep with another channel "
+                f"(correlation {_num(r['max_abs_corr_with_other'])}). ")
+        other = "the two channels"
     return (
-        f"Spend moves almost in lockstep with another channel (correlation {_num(r['max_abs_corr_with_other'])}). "
-        "The model cannot tell which of the two drives the results and may split the credit arbitrarily.",
-        "Run an experiment that moves one channel independently, or model the two together.",
+        lead + "The model cannot tell which one drives the results and may split the credit arbitrarily.",
+        f"Run an experiment that moves {other} independently of each other, or model them together.",
     )
 
 
@@ -120,27 +129,34 @@ def resolve_db_path(db_path: str | os.PathLike | None = None) -> Path:
     return Path(db_path or os.environ.get(DB_PATH_ENV) or DEFAULT_DB_PATH).expanduser()
 
 
-def load_report(db_path: str | os.PathLike | None = None, schema: str | None = None) -> list[dict]:
-    """Return every row of mmm_readiness_report as a dict, opening DuckDB read-only."""
+def _connect(db_path) -> tuple[duckdb.DuckDBPyConnection, Path]:
     path = resolve_db_path(db_path)
-    schema = schema or os.environ.get(SCHEMA_ENV) or "main"
     if not path.exists():
         raise ReadinessError(
             f"DuckDB file not found at {path}. Run `dbt build` in integration_tests/ first, "
             f"or set {DB_PATH_ENV} to the right path."
         )
     try:
-        con = duckdb.connect(str(path), read_only=True)
+        return duckdb.connect(str(path), read_only=True), path
     except duckdb.IOException as e:
         raise ReadinessError(
             f"Could not open {path} read-only ({e}). If `dbt build` is running, wait for it to finish."
         ) from e
+
+
+def _table_exists(con, schema: str, table: str) -> bool:
+    return con.execute(
+        "select count(*) from information_schema.tables where table_schema = ? and table_name = ?",
+        [schema, table],
+    ).fetchone()[0] > 0
+
+
+def load_report(db_path: str | os.PathLike | None = None, schema: str | None = None) -> list[dict]:
+    """Return every row of mmm_readiness_report as a dict, opening DuckDB read-only."""
+    schema = schema or os.environ.get(SCHEMA_ENV) or "main"
+    con, path = _connect(db_path)
     try:
-        exists = con.execute(
-            "select count(*) from information_schema.tables where table_schema = ? and table_name = ?",
-            [schema, TABLE],
-        ).fetchone()[0]
-        if not exists:
+        if not _table_exists(con, schema, TABLE):
             raise ReadinessError(
                 f"Table {schema}.{TABLE} not found in {path}. Run `dbt build` in integration_tests/ first."
             )
@@ -149,6 +165,29 @@ def load_report(db_path: str | os.PathLike | None = None, schema: str | None = N
         return [dict(zip(cols, row)) for row in cur.fetchall()]
     finally:
         con.close()
+
+
+def load_collinear_partners(db_path=None, schema: str | None = None) -> dict[str, list[dict]]:
+    """Map each channel to the channels it is flagged collinear with, strongest first.
+
+    Returns {} if mmm_channel_correlations is missing, so explanations fall back to generic text.
+    """
+    schema = schema or os.environ.get(SCHEMA_ENV) or "main"
+    con, _ = _connect(db_path)
+    try:
+        if not _table_exists(con, schema, CORRELATIONS_TABLE):
+            return {}
+        pairs = con.execute(
+            f'select channel_a, channel_b, spend_correlation from "{schema}"."{CORRELATIONS_TABLE}" '
+            "where is_collinear = 1 order by abs(spend_correlation) desc"
+        ).fetchall()
+    finally:
+        con.close()
+    partners: dict[str, list[dict]] = {}
+    for a, b, corr in pairs:
+        partners.setdefault(a, []).append({"channel": b, "correlation": round(float(corr), 4)})
+        partners.setdefault(b, []).append({"channel": a, "correlation": round(float(corr), 4)})
+    return partners
 
 
 def _active_flags(row: dict, flags: tuple[str, ...] | None = None) -> list[str]:
@@ -198,6 +237,8 @@ def channel_readiness(channel: str, db_path=None) -> dict:
     if row is None:
         valid = ", ".join(r["mmm_channel"] for r in rows)
         raise ReadinessError(f"Unknown channel '{channel}'. Valid channels: {valid}.")
+    if row.get("flag_collinear"):
+        row = {**row, "collinear_with": load_collinear_partners(db_path).get(key, [])}
     issues = []
     for col, (name, severity, action, explain) in FLAGS.items():
         if row.get(col):
@@ -215,5 +256,6 @@ def channel_readiness(channel: str, db_path=None) -> dict:
         "channel": row["mmm_channel"],
         "status": row["readiness_status"],
         "spend_share": round(float(row["spend_share"] or 0), 4),
+        "collinear_with": row.get("collinear_with", []),
         "issues": issues,
     }
