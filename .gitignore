@@ -5,6 +5,7 @@ logs/
 *.duckdb.wal
 .venv/
 .venv-meridian/
+.venv-mcp/
 examples/meridian/output/
 integration_tests/seeds/*.csv
 integration_tests/ground_truth.json
