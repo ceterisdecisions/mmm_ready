@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "mmm-readiness": {
+      "type": "stdio",
+      "command": "${CLAUDE_PROJECT_DIR:-.}/.venv-mcp/bin/python",
+      "args": ["${CLAUDE_PROJECT_DIR:-.}/mcp_server/server.py"],
+      "env": {
+        "MMM_READY_DUCKDB_PATH": "${MMM_READY_DUCKDB_PATH:-}"
+      }
+    }
+  }
+}

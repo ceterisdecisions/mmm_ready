@@ -26,6 +26,9 @@ The synthetic data comes with deliberately seeded issues (see `ground_truth.json
 
 To fit a model on the result, see the Meridian smoke test in [`examples/meridian/`](examples/meridian/README.md). It loads `mmm_input_weekly` into Meridian and compares the estimated ROI with the ground truth.
 
+To query the readiness report from an agent (Claude Code or any MCP client), see the MCP server in
+[`mcp_server/`](mcp_server/README.md).
+
 ## Using it with your data
 Your source tables need these columns:
 - `ad_spend_daily`: date, geo, platform, campaign_type, spend, impressions, clicks
