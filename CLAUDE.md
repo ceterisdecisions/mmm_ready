@@ -43,7 +43,7 @@ CI (`.github/workflows/ci.yml`) runs exactly: generate data → `dbt deps` → `
 
 Layered pipeline (`models/`): `staging` (views) → `intermediate` (views) → `marts` (tables) → `diagnostics` (tables).
 
-- **Sources** (`models/staging/_sources.yml`): three raw tables (`ad_spend_daily`, `outcomes_daily`, `controls_daily`) whose database/schema/identifier are all overridable via `mmm_ready_raw_*` vars. In integration tests these are the generated seeds. Staging lowercases/trims `geo`, `platform`, `campaign_type` and casts with cross-db `dbt.type_*()` macros. Required raw columns (selected by name, so a mismatch breaks the build):
+- **Sources** (`models/staging/_sources.yml`): three raw tables (`ad_spend_daily`, `outcomes_daily`, `controls_daily`) whose database/schema/identifier are all overridable via `mmm_ready_raw_*` vars. In integration tests these are the generated seeds. Staging lowercases/trims `geo`, `platform`, `campaign_type` and casts with cross-db `dbt.type_*()` macros, except floats: use `mmm_ready.mmm_ready_type_double()`, because `dbt.type_float()` is 32-bit on DuckDB and Spark/Databricks. Required raw columns (selected by name, so a mismatch breaks the build):
   - `ad_spend_daily`: date, geo, platform, campaign_type, spend, impressions, clicks
   - `outcomes_daily`: date, geo, revenue, conversions
   - `controls_daily`: date, geo, avg_price, promo_flag
