@@ -35,17 +35,19 @@ models:
     diagnostics:
       +materialized: table
 
+# Seed types are DDL type names, not macros: dbt.type_string() is not available here,
+# so pick the string type by adapter (BigQuery has no varchar).
 seeds:
   mmm_ready:
     channel_taxonomy:
       +column_types:
-        platform: varchar
-        campaign_type: varchar
-        mmm_channel: varchar
-        channel_group: varchar
+        platform: "{{ 'string' if target.type == 'bigquery' else 'varchar' }}"
+        campaign_type: "{{ 'string' if target.type == 'bigquery' else 'varchar' }}"
+        mmm_channel: "{{ 'string' if target.type == 'bigquery' else 'varchar' }}"
+        channel_group: "{{ 'string' if target.type == 'bigquery' else 'varchar' }}"
         demand_capture: boolean
     holidays:
       +column_types:
         holiday_date: date
-        country: varchar
-        holiday_name: varchar
+        country: "{{ 'string' if target.type == 'bigquery' else 'varchar' }}"
+        holiday_name: "{{ 'string' if target.type == 'bigquery' else 'varchar' }}"
