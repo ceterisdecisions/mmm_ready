@@ -7,7 +7,8 @@
 {% set channels = mmm_ready.get_mmm_channels() %}
 {% set drop_partial_weeks = mmm_ready.mmm_ready_as_bool(var('mmm_ready_drop_partial_weeks')) %}
 
-with spend as (
+-- Not named "spend": BigQuery would resolve the bare spend column to the CTE row.
+with spend_weekly as (
     select * from {{ ref('int_mmm__spend_weekly') }}
 ),
 
@@ -56,7 +57,7 @@ spend_pivot as (
         sum(case when mmm_channel = '{{ ch }}' then impressions else 0 end) as impressions_{{ ch }},
         {%- endfor %}
         sum(case when mmm_channel = 'unmapped' then spend else 0 end)       as spend_unmapped
-    from spend
+    from spend_weekly
     group by 1, 2
 )
 

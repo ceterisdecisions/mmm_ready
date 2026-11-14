@@ -23,5 +23,6 @@ from (
 ) t
 where total_spend = 0
 {% else %}
-select 1 as skipped where 1 = 0
+-- BigQuery rejects WHERE without FROM, hence the dummy subquery.
+select skipped from (select 1 as skipped) x where 1 = 0
 {% endif %}
