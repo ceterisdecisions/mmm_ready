@@ -14,3 +14,14 @@ sources:
       - name: controls_daily
         identifier: "{{ var('mmm_ready_controls_identifier') }}"
         description: Daily control variables by geo (price, promotions).
+
+  # GA4 / Firebase BigQuery export. Only read when mmm_ready_outcomes_source is ga4 or
+  # firebase; events_* is the wildcard over the daily events_YYYYMMDD tables, always
+  # filtered by _TABLE_SUFFIX (see macros/ga4_adapter.sql).
+  - name: mmm_ready_ga4
+    database: "{{ var('mmm_ready_ga4_project', none) or target.database }}"
+    schema: "{{ var('mmm_ready_ga4_dataset', none) or 'analytics_unset' }}"
+    tables:
+      - name: events
+        identifier: "events_*"
+        description: GA4 / Firebase daily event export tables (events_YYYYMMDD).

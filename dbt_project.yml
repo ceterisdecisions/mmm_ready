@@ -24,6 +24,17 @@ vars:
   mmm_ready_drop_partial_weeks: true  # drop first/last week of mmm_input_weekly if < 7 days of outcomes
   mmm_ready_pivot_all_channels: false # true: one column per taxonomy channel, even with zero spend
   mmm_ready_week_start: monday        # weekday weeks start on, identical on every warehouse
+  # Optional GA4 / Firebase outcomes adapter (BigQuery only), see README
+  mmm_ready_outcomes_source: raw      # raw | ga4 | firebase: where outcomes_daily comes from
+  mmm_ready_ga4_project: null         # export project (default: target.database)
+  mmm_ready_ga4_dataset: null         # export dataset, e.g. analytics_123456789
+  mmm_ready_ga4_start_date: null      # YYYY-MM-DD, required with ga4/firebase: bounds _TABLE_SUFFIX
+  mmm_ready_ga4_end_date: null        # YYYY-MM-DD, required with ga4/firebase
+  mmm_ready_ga4_conversion_events: null  # list; null = [purchase] (ga4) / [in_app_purchase] (firebase)
+  mmm_ready_ga4_revenue_field: purchase_revenue  # purchase_revenue | purchase_revenue_in_usd | event_value_in_usd
+  mmm_ready_ga4_geo_field: region     # country | region | city
+  mmm_ready_ga4_countries: []         # keep only these geo.country values; empty = all
+  mmm_ready_ga4_dedupe_transactions: true  # count each transaction_id once
 
 models:
   mmm_ready:
@@ -35,6 +46,8 @@ models:
       +materialized: table
     diagnostics:
       +materialized: table
+    adapters:
+      +materialized: table   # scan the export once per build
 
 # Seed types are DDL type names, not macros: dbt.type_string() is not available here,
 # so pick the string type by adapter (BigQuery has no varchar).

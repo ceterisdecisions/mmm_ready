@@ -1,5 +1,7 @@
+{{ config(enabled = (var('mmm_ready_outcomes_source', 'raw') | string | trim | lower) == 'raw') }}
 -- depends_on: {{ ref('mmm_input_weekly') }}
--- Exact shape of mmm_input_weekly on the synthetic data, for any mmm_ready_week_start.
+-- Exact shape of mmm_input_weekly on the synthetic data, for any mmm_ready_week_start
+-- (synthetic outcomes only: disabled when the KPI comes from the GA4/Firebase adapter).
 -- Data runs 2023-01-01 (Sunday) .. 2025-12-31 (Wednesday). Expected edge weeks are derived
 -- here in Python date arithmetic, independently of the SQL macro: with the default Monday
 -- weeks both edges are partial (first kept week 2023-01-02, last 2025-12-22).

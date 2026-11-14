@@ -1,0 +1,25 @@
+version: 2
+
+models:
+  - name: int_mmm__ga4_outcomes_daily
+    description: >
+      outcomes_daily built from the GA4 BigQuery export (web). Enabled with
+      mmm_ready_outcomes_source: ga4; BigQuery only. Same columns as the raw
+      outcomes_daily table, so everything downstream is unchanged.
+    tests:
+      - mmm_ready.unique_combination:
+          arguments:
+            columns: [date, geo]
+    columns:
+      - name: date
+        description: event_date (property time zone).
+        tests: [not_null]
+      - name: geo
+        description: geo.<mmm_ready_ga4_geo_field>, '(not set)' when missing.
+        tests: [not_null]
+      - name: revenue
+        description: Sum of mmm_ready_ga4_revenue_field over conversion events (0 on days without any).
+        tests: [not_null]
+      - name: conversions
+        description: Number of conversion events (deduplicated by transaction_id by default).
+        tests: [not_null]
