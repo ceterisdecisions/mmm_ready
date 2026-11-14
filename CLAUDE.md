@@ -35,6 +35,7 @@ dbt deps && dbt seed && dbt build
 - Model and downstream: `dbt build --select int_mmm__spend_mapped+`
 - Tests only: `dbt test --select mmm_input_weekly`
 - Inspect results: DuckDB file is `integration_tests/mmm_ready_dev.duckdb`.
+- BigQuery (opt-in, not in CI): `pip install -r requirements-bigquery.txt`, auth with `gcloud auth application-default login`, then `dbt seed --target bigquery` followed by `dbt build --target bigquery --exclude "package:mmm_ready_integration_tests,resource_type:seed"`. The exclude matters: the raw tables are `source`s, so dbt doesn't order them after their seeds, and reloading them inside `build` races with the staging models (BigQuery drops and recreates the table). The GCP project has no default (public repo): `export MMM_READY_BQ_PROJECT=<your-project>`, otherwise dbt stops with `Env var required but not provided: 'MMM_READY_BQ_PROJECT'`; DuckDB runs don't need it, because dbt renders only the selected target. Dataset defaults to `mmm_ready_dev` (`MMM_READY_BQ_DATASET`); location is pinned to `US`.
 
 CI (`.github/workflows/ci.yml`) runs exactly: generate data → `dbt deps` → `dbt seed` → `dbt build` → `dbt build --vars '{mmm_ready_drop_partial_weeks: false, mmm_ready_pivot_all_channels: true}'` on Python 3.11. A new boolean var should be added to that second build so CI covers its non-default branch.
 
@@ -60,7 +61,8 @@ Layered pipeline (`models/`): `staging` (views) → `intermediate` (views) → `
 - **Partial weeks** (`mmm_input_weekly`): with `mmm_ready_drop_partial_weeks: true` (default) the first and last week are dropped if they have fewer than 7 distinct days in `fct_outcomes_daily`, counted across the whole panel (not per geo). Interior gaps are not dropped. The readiness report never reads `mmm_input_weekly`, so it always sees the full data.
 - **Boolean vars**: read them with `mmm_ready.mmm_ready_as_bool(var(...))`, never a bare `var(...)` in an `if`: values passed with `--vars` can arrive as strings, and `"false"` is truthy in Jinja.
 - **Diagnostics**: `mmm_channel_correlations` computes pairwise weekly spend correlation (excluding `unmapped`); `mmm_readiness_report` consumes it plus `int_mmm__spend_weekly`, `int_mmm__platform_weekly` (per-platform gap detection) and `fct_outcomes_daily`. Flags split into blocking (`flag_unmapped_spend`, `flag_short_history`, `flag_kpi_gaps`) and review (`flag_platform_gaps`, `flag_sparse`, `flag_low_variance`, `flag_spike`, `flag_collinear`); status is derived from those sums. All thresholds are `mmm_ready_*` vars in the root `dbt_project.yml`.
-- **Week boundaries** use `dbt.date_trunc('week', ...)`, so week start is warehouse-dependent (e.g. BigQuery = Sunday). Only DuckDB is tested; Databricks/Snowflake not yet validated.
+- **Week boundaries** use `dbt.date_trunc('week', ...)`, so week start is warehouse-dependent: DuckDB = Monday, BigQuery = Sunday. DuckDB (CI) and BigQuery (manual) are validated; Databricks/Snowflake not yet.
+- **BigQuery SQL pitfalls** already hit: a CTE must not share a name with one of its columns (BigQuery resolves the bare name to the row STRUCT), and `WHERE` needs a `FROM` (use `from (select 1 as x) t`).
 
 ## Tests
 
