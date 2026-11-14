@@ -4,7 +4,7 @@
 -- spikes, sparsity, correlations), because a near-empty edge week looks like real variation.
 with week_days as (
     select
-        cast({{ dbt.date_trunc('week', 'date_day') }} as date) as week_start,
+        {{ mmm_ready.mmm_ready_week_start('date_day') }} as week_start,
         count(distinct date_day)                               as n_days
     from {{ ref('int_mmm__spend_mapped') }}
     group by 1

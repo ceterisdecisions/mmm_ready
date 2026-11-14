@@ -26,7 +26,7 @@ partial_edges as (
 ),
 
 kpi_weeks as (
-    select distinct cast({{ dbt.date_trunc('week', 'date_day') }} as date) as week_start
+    select distinct {{ mmm_ready.mmm_ready_week_start('date_day') }} as week_start
     from {{ ref('fct_outcomes_daily') }}
     where revenue is not null
 ),

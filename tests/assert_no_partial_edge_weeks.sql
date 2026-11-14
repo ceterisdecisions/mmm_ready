@@ -3,7 +3,7 @@
 {% if mmm_ready.mmm_ready_as_bool(var('mmm_ready_drop_partial_weeks')) %}
 with week_days as (
     select
-        cast({{ dbt.date_trunc('week', 'date_day') }} as date) as week_start,
+        {{ mmm_ready.mmm_ready_week_start('date_day') }} as week_start,
         count(distinct date_day)                               as n_days
     from {{ ref('fct_outcomes_daily') }}
     group by 1

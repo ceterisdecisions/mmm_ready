@@ -19,8 +19,8 @@ jobs:
       # The raw tables are sources, so dbt doesn't order them after their seeds: reloading
       # them inside build races with the staging models. They were loaded by dbt seed above.
       - run: dbt build --exclude "package:mmm_ready_integration_tests,resource_type:seed"
-      - name: dbt build (non-default cleanup vars)
-        run: "dbt build --exclude 'package:mmm_ready_integration_tests,resource_type:seed' --vars '{mmm_ready_drop_partial_weeks: false, mmm_ready_pivot_all_channels: true}'"
+      - name: dbt build (non-default vars)
+        run: "dbt build --exclude 'package:mmm_ready_integration_tests,resource_type:seed' --vars '{mmm_ready_drop_partial_weeks: false, mmm_ready_pivot_all_channels: true, mmm_ready_week_start: sunday}'"
       # MCP server tests run after dbt so the seeded-issues test sees the built DuckDB.
       # Separate venv: the MCP SDK pulls web dependencies we keep out of the dbt env.
       - name: MCP server tests

@@ -14,7 +14,7 @@ with spend_weekly as (
 
 outcomes as (
     select
-        cast({{ dbt.date_trunc('week', 'date_day') }} as date) as week_start,
+        {{ mmm_ready.mmm_ready_week_start('date_day') }} as week_start,
         geo,
         sum(revenue)      as revenue,
         sum(conversions)  as conversions,
@@ -27,7 +27,7 @@ outcomes as (
 
 week_days as (
     select
-        cast({{ dbt.date_trunc('week', 'date_day') }} as date) as week_start,
+        {{ mmm_ready.mmm_ready_week_start('date_day') }} as week_start,
         count(distinct date_day)                               as n_days
     from {{ ref('fct_outcomes_daily') }}
     group by 1

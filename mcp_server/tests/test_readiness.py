@@ -172,15 +172,19 @@ def test_seeded_issues_on_synthetic_data():
 
 @pytest.mark.skipif(not readiness.DEFAULT_DB_PATH.exists(), reason="run dbt build in integration_tests/ first")
 def test_partial_edge_weeks_excluded_from_week_stats():
-    """Synthetic data runs Sunday 2023-01-01 .. Wednesday 2025-12-31: with Monday weeks both edge
-    weeks are partial and must not count in per-week statistics."""
+    """Synthetic data runs Sunday 2023-01-01 .. Wednesday 2025-12-31, so whatever mmm_ready_week_start
+    the build used, at least one edge week is partial and must not count in per-week statistics."""
     con = duckdb.connect(str(readiness.DEFAULT_DB_PATH), read_only=True)
+    (n_partial,) = con.execute(
+        "select sum(is_partial_edge_week) from int_mmm__spend_week_calendar"
+    ).fetchone()
     rows = con.execute(
         "select mmm_channel, expected_weeks, complete_weeks, weeks_with_spend "
         "from mmm_readiness_report"
     ).fetchall()
     con.close()
+    assert n_partial >= 1
     assert rows
     for channel, expected, complete, with_spend in rows:
-        assert complete == expected - 2, channel
+        assert complete == expected - n_partial, channel
         assert with_spend <= complete, channel

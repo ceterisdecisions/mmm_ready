@@ -115,12 +115,14 @@ vars:
 
 The set of channel columns now depends on the data: a channel with spend gains a column on the next
 build. If a downstream job expects a fixed schema, set `mmm_ready_pivot_all_channels: true`.
-Which edge weeks are partial depends on the warehouse's week start (see Notes).
+Which edge weeks are partial depends on `mmm_ready_week_start` (see Notes).
 
 The readiness report always reads the full, untrimmed data.
 
 ## Notes
-- Week: the warehouse's `date_trunc('week')` is used; the week start may vary (BigQuery starts on Sunday).
-- Tested on DuckDB. Databricks and Snowflake: not yet validated.
+- Week: weeks start on Monday on every warehouse. Set `mmm_ready_week_start` to another weekday name
+  (`sunday`, ...) to change it. The package does not use `date_trunc('week')`, whose week start
+  differs between warehouses (BigQuery starts on Sunday), so DuckDB and BigQuery return the same weeks.
+- Tested on DuckDB (CI) and BigQuery. Databricks and Snowflake: not yet validated.
 
 Apache 2.0 License.
