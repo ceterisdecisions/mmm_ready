@@ -5,3 +5,17 @@ mmm_ready_integration_tests:
       type: duckdb
       path: mmm_ready_dev.duckdb
       threads: 4
+    # Opt-in: dbt build --target bigquery. Auth via `gcloud auth application-default login`.
+    # The GCP project is required and has no default: export MMM_READY_BQ_PROJECT=<your-project>.
+    # location must be US: the GA4/Firebase public sample datasets live there and
+    # BigQuery cannot query across locations.
+    bigquery:
+      type: bigquery
+      method: oauth
+      project: "{{ env_var('MMM_READY_BQ_PROJECT') }}"
+      dataset: "{{ env_var('MMM_READY_BQ_DATASET', 'mmm_ready_dev') }}"
+      location: US
+      threads: 4
+      priority: interactive
+      job_execution_timeout_seconds: 300
+      maximum_bytes_billed: 10000000000  # 10 GB per query, cost guard
