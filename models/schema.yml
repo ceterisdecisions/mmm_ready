@@ -42,6 +42,20 @@ models:
       Per-channel diagnostic. readiness_status = ready | review | blocked.
       blocked: unmapped spend, short history or weeks without KPI.
       review: per-platform gaps, sparse channel, low variance, spikes or collinearity.
+      History, KPI coverage, spend shares and gaps use the full period; sparsity,
+      variance and spikes skip partial edge weeks (see int_mmm__spend_week_calendar).
+    columns:
+      - name: complete_weeks
+        description: expected_weeks minus the partial first/last week, if any. Denominator of zero_week_share.
 
   - name: mmm_channel_correlations
-    description: Weekly spend correlation between channel pairs.
+    description: Weekly spend correlation between channel pairs, over complete weeks only.
+
+  - name: int_mmm__spend_week_calendar
+    description: >
+      Weeks of spend data with their number of days. is_partial_edge_week = 1 for the
+      first or last week when it has fewer than 7 days.
+    tests:
+      - mmm_ready.unique_combination:
+          arguments:
+            columns: [week_start]

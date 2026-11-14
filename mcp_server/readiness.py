@@ -74,7 +74,7 @@ def _explain_platform_gaps(r: dict) -> tuple[str, str]:
 
 def _explain_sparse(r: dict) -> tuple[str, str]:
     return (
-        f"The channel has no spend in {_pct(r['zero_week_share'])} of the weeks. With so few active weeks "
+        f"The channel has no spend in {_pct(r['zero_week_share'])} of the complete weeks. With so few active weeks "
         "the model has little evidence to estimate its effect.",
         "Check whether it is a genuinely occasional channel; consider merging it with a related channel.",
     )

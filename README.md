@@ -10,8 +10,10 @@ that data is fit for modeling.
 - `mmm_input_weekly`: wide week × geo table, with one spend and one impressions column per channel with spend
   (partial edge weeks dropped, see [Cleaning `mmm_input_weekly`](#cleaning-mmm_input_weekly)).
 - `mmm_readiness_report`: per channel, `ready` / `review` / `blocked` (history length, gaps, unmapped spend,
-  sparse channels, low variance, spikes, collinearity).
-- `mmm_channel_correlations`: spend correlation between channel pairs.
+  sparse channels, low variance, spikes, collinearity). Sparsity, variance and spikes are computed over
+  complete weeks only: a partial first or last week (fewer than 7 days of spend data) would look like
+  real variation.
+- `mmm_channel_correlations`: spend correlation between channel pairs, also over complete weeks.
 
 ## Local quickstart (DuckDB, zero cost)
 ```bash

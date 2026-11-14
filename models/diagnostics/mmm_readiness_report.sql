@@ -2,10 +2,27 @@
 -- blocked: unmapped spend, short history or weeks without KPI.
 -- review:  platform gaps (data loss or flighting: confirm which),
 --          sparse channel, low variance, spikes or collinearity.
+-- History length, KPI coverage, spend shares and gaps use the full period. Per-week
+-- statistics (sparsity, variance, spikes) skip partial edge weeks (int_mmm__spend_week_calendar),
+-- so the result does not depend on which weekday the data happens to start or end.
 with weekly as (
     select week_start, mmm_channel, sum(spend) as spend
     from {{ ref('int_mmm__spend_weekly') }}
     group by 1, 2
+),
+
+complete_weekly as (
+    select w.week_start, w.mmm_channel, w.spend
+    from weekly w
+    join {{ ref('int_mmm__spend_week_calendar') }} cal
+        on w.week_start = cal.week_start
+    where cal.is_partial_edge_week = 0
+),
+
+partial_edges as (
+    select count(*) as n_partial_edge_weeks
+    from {{ ref('int_mmm__spend_week_calendar') }}
+    where is_partial_edge_week = 1
 ),
 
 kpi_weeks as (
@@ -53,16 +70,34 @@ channel_gaps as (
     group by 1
 ),
 
-channel_stats as (
+channel_totals as (
+    select mmm_channel, sum(spend) as total_spend
+    from weekly
+    group by 1
+),
+
+-- Over complete weeks only (see header)
+channel_week_stats as (
     select
         mmm_channel,
         sum(case when spend > 0 then 1 else 0 end) as weeks_with_spend,
-        sum(spend)                                 as total_spend,
         avg(spend)                                 as avg_weekly_spend,
         stddev_samp(spend)                         as std_weekly_spend,
         max(spend)                                 as max_weekly_spend
-    from weekly
+    from complete_weekly
     group by 1
+),
+
+channel_stats as (
+    select
+        t.mmm_channel,
+        coalesce(w.weeks_with_spend, 0) as weeks_with_spend,
+        t.total_spend,
+        w.avg_weekly_spend,
+        w.std_weekly_spend,
+        w.max_weekly_spend
+    from channel_totals t
+    left join channel_week_stats w on t.mmm_channel = w.mmm_channel
 ),
 
 collinear as (
@@ -79,13 +114,14 @@ checks as (
     select
         s.mmm_channel,
         c.expected_weeks,
+        c.expected_weeks - pe.n_partial_edge_weeks                     as complete_weeks,
         kc.kpi_weeks,
         s.weeks_with_spend,
         g.gap_weeks,
         g.platforms_with_gaps,
         s.total_spend,
         s.total_spend / nullif(t.total_spend, 0)                       as spend_share,
-        1 - (s.weeks_with_spend * 1.0 / nullif(c.expected_weeks, 0))   as zero_week_share,
+        1 - (s.weeks_with_spend * 1.0 / nullif(c.expected_weeks - pe.n_partial_edge_weeks, 0)) as zero_week_share,
         s.std_weekly_spend / nullif(s.avg_weekly_spend, 0)             as cv_weekly_spend,
         s.max_weekly_spend / nullif(s.avg_weekly_spend, 0)             as spike_ratio,
         coalesce(k.max_abs_corr, 0)                                    as max_abs_corr_with_other,
@@ -100,7 +136,8 @@ checks as (
              then 1 else 0 end                                         as flag_kpi_gaps,
         -- review
         case when g.gap_weeks > 0 then 1 else 0 end                    as flag_platform_gaps,
-        case when 1 - (s.weeks_with_spend * 1.0 / nullif(c.expected_weeks, 0)) > {{ var('mmm_ready_max_zero_week_share') }}
+        case when 1 - (s.weeks_with_spend * 1.0 / nullif(c.expected_weeks - pe.n_partial_edge_weeks, 0))
+                  > {{ var('mmm_ready_max_zero_week_share') }}
              then 1 else 0 end                                         as flag_sparse,
         case when s.std_weekly_spend / nullif(s.avg_weekly_spend, 0) < {{ var('mmm_ready_min_cv') }}
              then 1 else 0 end                                         as flag_low_variance,
@@ -111,6 +148,7 @@ checks as (
     cross join calendar c
     cross join kpi_coverage kc
     cross join totals t
+    cross join partial_edges pe
     left join channel_gaps g on s.mmm_channel = g.mmm_channel
     left join collinear k   on s.mmm_channel = k.channel
 )

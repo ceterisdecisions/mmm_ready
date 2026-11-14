@@ -1,8 +1,12 @@
 -- Weekly spend correlation (all geos combined) between channel pairs.
+-- Partial edge weeks are skipped: near-empty weeks at both ends make every pair look correlated.
 with weekly as (
-    select week_start, mmm_channel, sum(spend) as spend
-    from {{ ref('int_mmm__spend_weekly') }}
-    where mmm_channel <> 'unmapped'
+    select w.week_start, w.mmm_channel, sum(w.spend) as spend
+    from {{ ref('int_mmm__spend_weekly') }} w
+    join {{ ref('int_mmm__spend_week_calendar') }} cal
+        on w.week_start = cal.week_start
+    where w.mmm_channel <> 'unmapped'
+      and cal.is_partial_edge_week = 0
     group by 1, 2
 )
 
