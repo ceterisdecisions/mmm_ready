@@ -9,8 +9,8 @@ It opens the DuckDB file **read-only** and never writes to it.
 
 | tool | returns |
 |---|---|
-| `readiness_summary` | channel count per status (`ready` / `review` / `blocked`), which channels are blocked and by what, and which need review |
-| `channel_readiness(channel)` | each flagged issue for one channel: a plain business explanation using the channel's own numbers, a recommended action (`fix the data`, `review`, `validate with an experiment`) and a concrete next step |
+| `readiness_summary` | channel count per status (`ready` / `review` / `blocked`), which channels are blocked and by what, which need review, and informational `warnings` |
+| `channel_readiness(channel)` | each flagged issue for one channel: a plain business explanation using the channel's own numbers, a recommended action (`fix the data`, `review`, `validate with an experiment`) and a concrete next step; plus `warnings` |
 | `list_channels` | every channel with its status, total spend and share of spend |
 
 Recommended action per flag:
@@ -23,6 +23,12 @@ Recommended action per flag:
 
 Low variance and collinearity are not data errors: the data simply cannot identify the effect, so the
 fix is a lift or geo experiment used as a prior or for calibration.
+
+Warnings (`severity: info`) never change a status, a count, `ready_for_modeling` or the issue
+lists. Today there is one: `kpi_from_analytics`, when the report's `warn_kpi_from_analytics` is 1
+because the KPI was built from GA4/Firebase (`mmm_ready_outcomes_source`) instead of the ERP or
+backend; the next step is to reconcile analytics revenue against the backend. Reports built before
+that column existed simply return no warnings.
 
 For collinear channels, `channel_readiness` also reads `mmm_channel_correlations` and names the
 partner channel(s) with their correlation (`collinear_with` field and in the explanation). If that

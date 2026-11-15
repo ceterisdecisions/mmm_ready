@@ -25,7 +25,8 @@ def _call(fn, *args):
 
 @mcp.tool()
 def readiness_summary() -> dict:
-    """Count MMM channels by readiness status (ready / review / blocked) and list what blocks modeling."""
+    """Count MMM channels by readiness status (ready / review / blocked) and list what blocks modeling.
+    Also returns informational warnings (e.g. a KPI taken from web analytics) that do not change any status."""
     return _call(readiness.readiness_summary)
 
 

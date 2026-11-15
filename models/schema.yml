@@ -47,6 +47,16 @@ models:
     columns:
       - name: complete_weeks
         description: expected_weeks minus the partial first/last week, if any. Denominator of zero_week_share.
+      - name: kpi_source
+        description: Where outcomes_daily came from (mmm_ready_outcomes_source) - raw, ga4 or firebase.
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['raw', 'ga4', 'firebase']
+      - name: warn_kpi_from_analytics
+        description: >
+          1 when the KPI comes from GA4/Firebase analytics instead of the ERP or backend.
+          Informational only: not counted in blocking_issues, review_issues or readiness_status.
 
   - name: mmm_channel_correlations
     description: Weekly spend correlation between channel pairs, over complete weeks only.

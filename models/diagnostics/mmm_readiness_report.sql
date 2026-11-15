@@ -2,6 +2,8 @@
 -- blocked: unmapped spend, short history or weeks without KPI.
 -- review:  platform gaps (data loss or flighting: confirm which),
 --          sparse channel, low variance, spikes or collinearity.
+-- Informational (never part of readiness_status): kpi_source says where outcomes_daily came
+-- from, and warn_kpi_from_analytics = 1 when it is GA4/Firebase rather than the ERP or backend.
 -- History length, KPI coverage, spend shares and gaps use the full period. Per-week
 -- statistics (sparsity, variance, spikes) skip partial edge weeks (int_mmm__spend_week_calendar),
 -- so the result does not depend on which weekday the data happens to start or end.
@@ -163,5 +165,8 @@ select
         when flag_platform_gaps + flag_sparse + flag_low_variance
            + flag_spike + flag_collinear > 0 then 'review'
         else 'ready'
-    end                                                                 as readiness_status
+    end                                                                 as readiness_status,
+    {%- set kpi_source = mmm_ready.mmm_ready_outcomes_source() %}
+    '{{ kpi_source }}'                                                  as kpi_source,
+    {{ 1 if kpi_source in ['ga4', 'firebase'] else 0 }}                as warn_kpi_from_analytics
 from checks

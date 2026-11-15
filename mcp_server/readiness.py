@@ -112,6 +112,36 @@ def _explain_collinear(r: dict) -> tuple[str, str]:
     )
 
 
+def _explain_kpi_from_analytics(r: dict) -> tuple[str, str]:
+    source = {"ga4": "GA4 (web analytics)", "firebase": "Firebase (app analytics)"}.get(
+        r.get("kpi_source"), "web/app analytics"
+    )
+    return (
+        f"The KPI (revenue/conversions) comes from {source}, not from the ERP or the order backend. "
+        "Analytics undercounts (consent banners, ad blockers, cross-device journeys) and the gap can "
+        "change over time, so the model may attribute those changes to marketing.",
+        "Reconcile a few months of analytics revenue against the ERP/backend; if the gap is large or "
+        "unstable, feed the model the backend KPI instead.",
+    )
+
+
+# Informational warnings: shown by the tools but never part of readiness_status.
+# column -> (short name, explainer)
+WARNINGS: dict[str, tuple[str, Any]] = {
+    "warn_kpi_from_analytics": ("kpi_from_analytics", _explain_kpi_from_analytics),
+}
+
+
+def _warnings(row: dict) -> list[dict]:
+    # row.get: reports built before a warning column existed simply have no warnings.
+    out = []
+    for col, (name, explain) in WARNINGS.items():
+        if row.get(col):
+            explanation, next_step = explain(row)
+            out.append({"warning": name, "severity": "info", "explanation": explanation, "next_step": next_step})
+    return out
+
+
 # flag column -> (short name, severity, action category, explainer)
 FLAGS: dict[str, tuple[str, str, str, Any]] = {
     "flag_unmapped_spend": ("unmapped_spend", "blocking", FIX_DATA, _explain_unmapped),
@@ -227,6 +257,8 @@ def readiness_summary(db_path=None) -> dict:
         "ready_for_modeling": not blocked,
         "blocked": blocked,
         "needs_review": review,
+        # Dataset-level (same on every row), informational: does not affect the fields above.
+        "warnings": _warnings(rows[0]) if rows else [],
     }
 
 
@@ -258,4 +290,5 @@ def channel_readiness(channel: str, db_path=None) -> dict:
         "spend_share": round(float(row["spend_share"] or 0), 4),
         "collinear_with": row.get("collinear_with", []),
         "issues": issues,
+        "warnings": _warnings(row),
     }

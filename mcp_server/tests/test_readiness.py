@@ -28,9 +28,23 @@ def _row(channel, status, spend, share, **flags):
         "max_abs_corr_with_other": 0.3,
         **{c: 0 for c in FLAG_COLS},
         "readiness_status": status,
+        "kpi_source": "raw",
+        "warn_kpi_from_analytics": 0,
     }
     base.update(flags)
     return base
+
+
+def _write_db(path, rows):
+    con = duckdb.connect(str(path))
+    cols = list(rows[0])
+    con.execute(
+        "create table mmm_readiness_report as select * from (values "
+        + ", ".join("(" + ", ".join("?" for _ in cols) + ")" for _ in rows)
+        + ") t(" + ", ".join(cols) + ")",
+        [v for r in rows for v in r.values()],
+    )
+    con.close()
 
 
 @pytest.fixture
@@ -43,14 +57,8 @@ def db(tmp_path):
         _row("unmapped", "blocked", 100.0, 0.05, flag_unmapped_spend=1),
     ]
     path = tmp_path / "test.duckdb"
+    _write_db(path, rows)
     con = duckdb.connect(str(path))
-    cols = list(rows[0])
-    con.execute(
-        "create table mmm_readiness_report as select * from (values "
-        + ", ".join("(" + ", ".join("?" for _ in cols) + ")" for _ in rows)
-        + ") t(" + ", ".join(cols) + ")",
-        [v for r in rows for v in r.values()],
-    )
     con.execute(
         "create table mmm_channel_correlations as select * from (values "
         "('search_brand', 'tv', 0.97, 1), ('social_prospecting', 'tv', 0.50, 0)"
@@ -118,6 +126,52 @@ def test_ready_channel_has_no_issues(db):
     assert readiness.channel_readiness("search_brand", db)["issues"] == []
 
 
+def test_no_warnings_with_raw_kpi(db):
+    assert readiness.readiness_summary(db)["warnings"] == []
+    assert readiness.channel_readiness("tv", db)["warnings"] == []
+
+
+@pytest.mark.parametrize("source,label", [("ga4", "GA4 (web analytics)"), ("firebase", "Firebase (app analytics)")])
+def test_analytics_kpi_warning_is_informational(tmp_path, source, label):
+    flags = {"kpi_source": source, "warn_kpi_from_analytics": 1}
+    rows = [
+        _row("search_brand", "ready", 1000.0, 0.9, **flags),
+        _row("unmapped", "blocked", 100.0, 0.1, flag_unmapped_spend=1, **flags),
+    ]
+    path = tmp_path / "analytics.duckdb"
+    _write_db(path, rows)
+
+    s = readiness.readiness_summary(path)
+    (w,) = s["warnings"]
+    assert w["warning"] == "kpi_from_analytics" and w["severity"] == "info"
+    assert label in w["explanation"] and "ERP" in w["next_step"]
+    # The warning changes no status, count or issue list.
+    assert s["counts_by_status"] == {"ready": 1, "review": 0, "blocked": 1}
+    assert s["needs_review"] == []
+    assert s["blocked"] == [{"channel": "unmapped", "blocking_issues": ["unmapped_spend"]}]
+
+    r = readiness.channel_readiness("search_brand", path)
+    assert r["status"] == "ready" and r["issues"] == []
+    assert [x["warning"] for x in r["warnings"]] == ["kpi_from_analytics"]
+
+
+def test_report_without_warning_columns_has_no_warnings(tmp_path):
+    """Reports built before kpi_source existed still work."""
+    row = _row("search_brand", "ready", 1.0, 1.0)
+    del row["kpi_source"], row["warn_kpi_from_analytics"]
+    path = tmp_path / "old.duckdb"
+    _write_db(path, [row])
+    assert readiness.readiness_summary(path)["warnings"] == []
+    assert readiness.channel_readiness("search_brand", path)["warnings"] == []
+
+
+def test_every_warning_has_an_explanation():
+    row = _row("x", "ready", 1.0, 1.0, kpi_source="ga4", warn_kpi_from_analytics=1)
+    for _, (_, explain) in readiness.WARNINGS.items():
+        explanation, next_step = explain(row)
+        assert explanation and next_step
+
+
 def test_every_flag_has_an_explanation():
     row = _row("x", "review", 1.0, 1.0, **{c: 1 for c in FLAG_COLS})
     for _, (_, severity, action, explain) in readiness.FLAGS.items():
@@ -168,6 +222,7 @@ def test_seeded_issues_on_synthetic_data():
     assert "collinear" in issues("video_online") and "collinear" in issues("tv")  # YouTube ~ TV
     assert [p["channel"] for p in readiness.channel_readiness("tv")["collinear_with"]] == ["video_online"]
     assert readiness.readiness_summary()["ready_for_modeling"] is False
+    assert readiness.readiness_summary()["warnings"] == []  # synthetic KPI = raw backend data
 
 
 @pytest.mark.skipif(not readiness.DEFAULT_DB_PATH.exists(), reason="run dbt build in integration_tests/ first")
