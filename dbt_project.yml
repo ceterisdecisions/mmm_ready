@@ -31,7 +31,7 @@ vars:
   mmm_ready_ga4_start_date: null      # YYYY-MM-DD, required with ga4/firebase: bounds _TABLE_SUFFIX
   mmm_ready_ga4_end_date: null        # YYYY-MM-DD, required with ga4/firebase
   mmm_ready_ga4_conversion_events: null  # list; null = [purchase] (ga4) / [in_app_purchase] (firebase)
-  mmm_ready_ga4_revenue_field: purchase_revenue  # purchase_revenue | purchase_revenue_in_usd | event_value_in_usd
+  mmm_ready_ga4_revenue_field: null  # null = purchase_revenue (ga4) / event_value_in_usd (firebase); also purchase_revenue_in_usd
   mmm_ready_ga4_geo_field: region     # country | region | city
   mmm_ready_ga4_countries: []         # keep only these geo.country values; empty = all
   mmm_ready_ga4_dedupe_transactions: true  # count each transaction_id once

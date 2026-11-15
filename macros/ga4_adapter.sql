@@ -119,18 +119,41 @@
 {%- endmacro %}
 
 
-{#- Revenue column of the export to sum, as a SQL expression. -#}
+{#-
+    Revenue column of the export to sum, as a SQL expression. Default by source:
+    ecommerce.purchase_revenue for ga4; event_value_in_usd for firebase, whose export
+    (at least the 2018 schema of the public sample) has no ecommerce struct.
+-#}
 {% macro mmm_ready_ga4_revenue_expr() -%}
-    {%- set field = var('mmm_ready_ga4_revenue_field', 'purchase_revenue') | string | trim | lower -%}
+    {%- set source = mmm_ready.mmm_ready_outcomes_source() -%}
     {%- set exprs = {
         'purchase_revenue': 'ecommerce.purchase_revenue',
         'purchase_revenue_in_usd': 'ecommerce.purchase_revenue_in_usd',
         'event_value_in_usd': 'event_value_in_usd',
     } -%}
-    {%- if field not in exprs -%}
+    {%- set allowed = ['event_value_in_usd'] if source == 'firebase' else exprs.keys() | list -%}
+    {%- set default = 'event_value_in_usd' if source == 'firebase' else 'purchase_revenue' -%}
+    {%- set field = var('mmm_ready_ga4_revenue_field', none) -%}
+    {%- set field = default if field is none or (field | string | trim) == '' else field | string | trim | lower -%}
+    {%- if field not in allowed -%}
         {{ mmm_ready._mmm_ready_ga4_fail(
-            "mmm_ready_ga4_revenue_field must be one of " ~ exprs.keys() | list | join(', ') ~ ", got '" ~ field ~ "'") }}
-        {{ return(exprs['purchase_revenue']) }}
+            "mmm_ready_ga4_revenue_field must be one of " ~ allowed | join(', ') ~ " with mmm_ready_outcomes_source = "
+            ~ source ~ ", got '" ~ field ~ "'") }}
+        {{ return(exprs[default]) }}
     {%- endif -%}
     {{ return(exprs[field]) }}
+{%- endmacro %}
+
+
+{#-
+    Key that identifies repeated conversions, as a SQL expression; null = never deduplicated.
+    ga4: the transaction_id ('(not set)' treated as missing), as GA4 reports do.
+    firebase: no transaction_id in the export, so only exact repeats of the same event
+    (same user and timestamp) are dropped.
+-#}
+{% macro mmm_ready_ga4_dedupe_key_expr() -%}
+    {%- if mmm_ready.mmm_ready_outcomes_source() == 'firebase' -%}
+        {{ return("concat(user_pseudo_id, '|', cast(event_timestamp as string))") }}
+    {%- endif -%}
+    {{ return("nullif(ecommerce.transaction_id, '(not set)')") }}
 {%- endmacro %}
