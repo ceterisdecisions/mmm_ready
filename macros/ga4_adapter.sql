@@ -157,3 +157,35 @@
     {%- endif -%}
     {{ return("nullif(ecommerce.transaction_id, '(not set)')") }}
 {%- endmacro %}
+
+
+{#-
+    Checks for int_mmm__ga4_ai_referral_daily: BigQuery only, and web only (an app export has
+    no referrer, so the model is rejected with mmm_ready_outcomes_source = firebase).
+-#}
+{% macro mmm_ready_ga4_ai_referral_checks() -%}
+    {%- if target.type != 'bigquery' -%}
+        {{ mmm_ready._mmm_ready_ga4_fail(
+            "mmm_ready_ga4_ai_referral needs a BigQuery target (the GA4 export exists only in "
+            ~ "BigQuery); current target type is " ~ target.type) }}
+    {%- endif -%}
+    {%- if mmm_ready.mmm_ready_outcomes_source() == 'firebase' -%}
+        {{ mmm_ready._mmm_ready_ga4_fail(
+            "mmm_ready_ga4_ai_referral is for GA4 web exports: Firebase app events have no referrer") }}
+    {%- endif -%}
+{%- endmacro %}
+
+
+{#- Value of an event_params key (string_value or int_value), as a SQL expression. -#}
+{% macro mmm_ready_ga4_param(key, kind='string') -%}
+    (select value.{{ kind }}_value from unnest(event_params) where key = '{{ key }}' limit 1)
+{%- endmacro %}
+
+
+{#-
+    True when host_expr is domain_expr or a subdomain of it. "notchatgpt.com" does not
+    match chatgpt.com: a subdomain needs the dot.
+-#}
+{% macro mmm_ready_ga4_domain_match(host_expr, domain_expr) -%}
+    ({{ host_expr }} = {{ domain_expr }} or ends_with({{ host_expr }}, concat('.', {{ domain_expr }})))
+{%- endmacro %}

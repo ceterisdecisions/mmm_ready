@@ -35,6 +35,7 @@ vars:
   mmm_ready_ga4_geo_field: region     # country | region | city
   mmm_ready_ga4_countries: []         # keep only these geo.country values; empty = all
   mmm_ready_ga4_dedupe_transactions: true  # count each transaction_id once
+  mmm_ready_ga4_ai_referral: false    # build int_mmm__ga4_ai_referral_daily (GA4 web; reads event_params, ~7x the bytes)
 
 models:
   mmm_ready:
@@ -60,6 +61,10 @@ seeds:
         mmm_channel: "{{ 'string' if target.type == 'bigquery' else 'varchar' }}"
         channel_group: "{{ 'string' if target.type == 'bigquery' else 'varchar' }}"
         demand_capture: boolean
+    ai_referral_domains:
+      +column_types:
+        domain: "{{ 'string' if target.type == 'bigquery' else 'varchar' }}"
+        assistant: "{{ 'string' if target.type == 'bigquery' else 'varchar' }}"
     holidays:
       +column_types:
         holiday_date: date

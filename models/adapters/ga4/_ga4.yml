@@ -23,3 +23,27 @@ models:
       - name: conversions
         description: Number of conversion events (deduplicated by transaction_id by default).
         tests: [not_null]
+
+  - name: int_mmm__ga4_ai_referral_daily
+    description: >
+      GA4 web sessions, conversions and revenue per day, geo and traffic_source_group
+      (ai_referral = referrer host or utm_source in the ai_referral_domains seed, else other).
+      Enabled with mmm_ready_ga4_ai_referral: true; BigQuery and GA4 web only. Unpaid traffic:
+      a separate table, not an MMM channel.
+    tests:
+      - mmm_ready.unique_combination:
+          arguments:
+            columns: [date, geo, traffic_source_group, ai_assistant]
+    columns:
+      - name: traffic_source_group
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['ai_referral', 'other']
+      - name: ai_assistant
+        description: Assistant of the matching domain (null for other).
+      - name: sessions
+        tests: [not_null]
+      - name: conversions
+        tests: [not_null]

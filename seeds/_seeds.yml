@@ -18,3 +18,16 @@ seeds:
       - name: demand_capture
         description: True if the channel mainly captures existing demand rather than creating it.
         tests: [not_null]
+
+  - name: ai_referral_domains
+    description: >
+      Referrer domains of AI assistants. A GA4 session whose referrer host (or utm_source)
+      is one of these domains or a subdomain of one is classified as ai_referral by
+      int_mmm__ga4_ai_referral_daily. Kept to the main assistants on purpose.
+    columns:
+      - name: domain
+        description: Registrable domain or host, lowercase, without scheme or path.
+        tests: [unique, not_null]
+      - name: assistant
+        description: Assistant the domain belongs to (several domains may share one).
+        tests: [not_null]

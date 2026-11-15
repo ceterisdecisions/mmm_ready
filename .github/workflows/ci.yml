@@ -22,7 +22,7 @@ jobs:
       - name: dbt build (non-default vars)
         run: "dbt build --exclude 'package:mmm_ready_integration_tests,resource_type:seed' --vars '{mmm_ready_drop_partial_weeks: false, mmm_ready_pivot_all_channels: true, mmm_ready_week_start: sunday}'"
       # The GA4/Firebase adapter is the one BigQuery-only part: it must refuse other targets.
-      - name: GA4/Firebase adapter rejects non-BigQuery targets
+      - name: GA4/Firebase adapter and AI referral model reject non-BigQuery targets
         run: |
           for src in ga4 firebase; do
             if dbt compile --select stg_mmm__outcomes --vars "{mmm_ready_outcomes_source: $src}" > guard.log 2>&1; then
@@ -30,6 +30,10 @@ jobs:
             fi
             grep -q "needs a BigQuery target" guard.log || { cat guard.log; exit 1; }
           done
+          if dbt compile --select int_mmm__ga4_ai_referral_daily --vars "{mmm_ready_ga4_ai_referral: true}" > guard.log 2>&1; then
+            echo "expected a compile error for mmm_ready_ga4_ai_referral on DuckDB"; exit 1
+          fi
+          grep -q "needs a BigQuery target" guard.log || { cat guard.log; exit 1; }
       # MCP server tests run after dbt so the seeded-issues test sees the built DuckDB.
       # Separate venv: the MCP SDK pulls web dependencies we keep out of the dbt env.
       - name: MCP server tests
