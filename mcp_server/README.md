@@ -21,6 +21,9 @@ Recommended action per flag:
 | `platform_gaps`, `sparse`, `spike` | review | review |
 | `low_variance`, `collinear` | review | validate with an experiment |
 
+Explanations use the report's own numbers. For `short_history` that includes the minimum the report
+was built with (`min_history_weeks`, from `mmm_ready_min_history_weeks`), so the text follows the var.
+
 Low variance and collinearity are not data errors: the data simply cannot identify the effect, so the
 fix is a lift or geo experiment used as a prior or for calibration.
 

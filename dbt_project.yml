@@ -15,12 +15,16 @@ vars:
   mmm_ready_outcomes_identifier: outcomes_daily
   mmm_ready_controls_identifier: controls_daily
   mmm_ready_holiday_country: ES
-  mmm_ready_min_history_weeks: 104    # reliable MMM: >= 2 years
-  mmm_ready_max_zero_week_share: 0.5  # channel with >50% zero-spend weeks = low information
-  mmm_ready_min_cv: 0.1               # minimum spend variation
-  mmm_ready_max_spike_ratio: 5        # max week / mean
-  mmm_ready_max_corr: 0.8             # collinearity between channels
-  mmm_ready_max_unmapped_share: 0.02  # tolerated share of unmapped spend
+  # Readiness report thresholds (README, "Readiness thresholds"). Every default is a
+  # heuristic, not a statistical standard: initial heuristic, adjustable.
+  mmm_ready_min_history_weeks: 104    # blocking if expected_weeks < this. Initial heuristic, adjustable
+  mmm_ready_max_unmapped_share: 0.02  # blocking if unmapped spend share > this. Initial heuristic, adjustable
+  mmm_ready_max_kpi_missing_weeks: 0  # blocking if weeks without KPI > this. Initial heuristic, adjustable
+  mmm_ready_max_platform_gap_weeks: 0 # review if any platform's gap weeks > this. Initial heuristic, adjustable
+  mmm_ready_max_zero_week_share: 0.5  # review if share of zero-spend weeks > this. Initial heuristic, adjustable
+  mmm_ready_min_cv: 0.1               # review if weekly spend CV < this. Initial heuristic, adjustable
+  mmm_ready_max_spike_ratio: 5        # review if max week / mean week > this. Initial heuristic, adjustable
+  mmm_ready_max_corr: 0.8             # review if |correlation| >= this (note: >=). Initial heuristic, adjustable
   mmm_ready_drop_partial_weeks: true  # drop first/last week of mmm_input_weekly if < 7 days of outcomes
   mmm_ready_pivot_all_channels: false # true: one column per taxonomy channel, even with zero spend
   mmm_ready_week_start: monday        # weekday weeks start on, identical on every warehouse
