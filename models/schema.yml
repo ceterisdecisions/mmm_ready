@@ -47,6 +47,16 @@ models:
     columns:
       - name: complete_weeks
         description: expected_weeks minus the partial first/last week, if any. Denominator of zero_week_share.
+      - name: kpi_missing_weeks
+        description: expected_weeks minus weeks with KPI. flag_kpi_gaps = 1 when > mmm_ready_max_kpi_missing_weeks.
+      - name: gap_weeks
+        description: Gap weeks summed over the channel's platforms (informational, not compared with a threshold).
+      - name: max_platform_gap_weeks
+        description: >
+          Largest gap of any single platform of the channel (weeks with no rows between its first and
+          last active week). flag_platform_gaps = 1 when > mmm_ready_max_platform_gap_weeks.
+      - name: min_history_weeks
+        description: The mmm_ready_min_history_weeks value the report was built with.
       - name: kpi_source
         description: Where outcomes_daily came from (mmm_ready_outcomes_source) - raw, ga4 or firebase.
         tests:

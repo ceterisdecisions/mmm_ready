@@ -26,6 +26,7 @@ def _row(channel, status, spend, share, **flags):
         "cv_weekly_spend": 0.4,
         "spike_ratio": 1.5,
         "max_abs_corr_with_other": 0.3,
+        "min_history_weeks": 104,
         **{c: 0 for c in FLAG_COLS},
         "readiness_status": status,
         "kpi_source": "raw",
@@ -163,6 +164,27 @@ def test_report_without_warning_columns_has_no_warnings(tmp_path):
     _write_db(path, [row])
     assert readiness.readiness_summary(path)["warnings"] == []
     assert readiness.channel_readiness("search_brand", path)["warnings"] == []
+
+
+def test_short_history_quotes_the_report_threshold(tmp_path):
+    """The text follows mmm_ready_min_history_weeks as stored in the report, not a fixed number."""
+    rows = [_row("tv", "blocked", 1.0, 1.0, expected_weeks=80, flag_short_history=1, min_history_weeks=52)]
+    path = tmp_path / "history.duckdb"
+    _write_db(path, rows)
+    (issue,) = readiness.channel_readiness("tv", path)["issues"]
+    assert issue["issue"] == "short_history"
+    assert "Only 80 weeks" in issue["explanation"] and "minimum of 52" in issue["explanation"]
+    assert issue["next_step"] == "Load at least 52 weeks of history before modeling."
+    assert "two years" not in issue["explanation"] + issue["next_step"]
+
+    # Reports built before min_history_weeks existed: no number is quoted.
+    row = dict(rows[0])
+    del row["min_history_weeks"]
+    old = tmp_path / "history_old.duckdb"
+    _write_db(old, [row])
+    (issue,) = readiness.channel_readiness("tv", old)["issues"]
+    assert "mmm_ready_min_history_weeks" in issue["explanation"]
+    assert issue["next_step"] == "Load a longer history before modeling."
 
 
 def test_every_warning_has_an_explanation():

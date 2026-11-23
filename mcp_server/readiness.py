@@ -48,10 +48,18 @@ def _explain_unmapped(r: dict) -> tuple[str, str]:
 
 
 def _explain_short_history(r: dict) -> tuple[str, str]:
+    # The threshold comes from the report (mmm_ready_min_history_weeks); older reports lack the column.
+    minimum = r.get("min_history_weeks")
+    if minimum is not None:
+        below = f", below the minimum of {minimum} set by mmm_ready_min_history_weeks"
+        step = f"Load at least {minimum} weeks of history before modeling."
+    else:
+        below = ", below the minimum set by mmm_ready_min_history_weeks"
+        step = "Load a longer history before modeling."
     return (
-        f"Only {r['expected_weeks']} weeks of history are available. That is too little to separate "
+        f"Only {r['expected_weeks']} weeks of history are available{below}. That is too little to separate "
         "marketing effects from seasonality and trend, so results would be unreliable.",
-        "Load a longer history (ideally two years or more) before modeling.",
+        step,
     )
 
 

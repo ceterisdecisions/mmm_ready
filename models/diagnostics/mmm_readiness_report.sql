@@ -63,10 +63,13 @@ platform_gaps as (
     group by 1, 2
 ),
 
+-- gap_weeks is the sum over the channel's platforms (informational); the flag compares
+-- max_platform_gap_weeks, the largest gap of any single platform, with the threshold.
 channel_gaps as (
     select
         mmm_channel,
         sum(gap_weeks) as gap_weeks,
+        max(gap_weeks) as max_platform_gap_weeks,
         {{ dbt.listagg("case when gap_weeks > 0 then platform end", "', '") }} as platforms_with_gaps
     from platform_gaps
     group by 1
@@ -119,7 +122,9 @@ checks as (
         c.expected_weeks - pe.n_partial_edge_weeks                     as complete_weeks,
         kc.kpi_weeks,
         s.weeks_with_spend,
+        c.expected_weeks - kc.kpi_weeks                                as kpi_missing_weeks,
         g.gap_weeks,
+        g.max_platform_gap_weeks,
         g.platforms_with_gaps,
         s.total_spend,
         s.total_spend / nullif(t.total_spend, 0)                       as spend_share,
@@ -127,17 +132,22 @@ checks as (
         s.std_weekly_spend / nullif(s.avg_weekly_spend, 0)             as cv_weekly_spend,
         s.max_weekly_spend / nullif(s.avg_weekly_spend, 0)             as spike_ratio,
         coalesce(k.max_abs_corr, 0)                                    as max_abs_corr_with_other,
+        -- The applied threshold, so readers of the table (e.g. the MCP server) can quote it
+        {{ var('mmm_ready_min_history_weeks') }}                       as min_history_weeks,
 
+        -- Thresholds: mmm_ready_* vars in the root dbt_project.yml. All strict (> or <),
+        -- except collinearity (>=, in mmm_channel_correlations).
         -- blocking
         case when s.mmm_channel = 'unmapped'
               and s.total_spend / nullif(t.total_spend, 0) > {{ var('mmm_ready_max_unmapped_share') }}
              then 1 else 0 end                                         as flag_unmapped_spend,
         case when c.expected_weeks < {{ var('mmm_ready_min_history_weeks') }}
              then 1 else 0 end                                         as flag_short_history,
-        case when kc.kpi_weeks < c.expected_weeks
+        case when c.expected_weeks - kc.kpi_weeks > {{ var('mmm_ready_max_kpi_missing_weeks') }}
              then 1 else 0 end                                         as flag_kpi_gaps,
         -- review
-        case when g.gap_weeks > 0 then 1 else 0 end                    as flag_platform_gaps,
+        case when g.max_platform_gap_weeks > {{ var('mmm_ready_max_platform_gap_weeks') }}
+             then 1 else 0 end                                         as flag_platform_gaps,
         case when 1 - (s.weeks_with_spend * 1.0 / nullif(c.expected_weeks - pe.n_partial_edge_weeks, 0))
                   > {{ var('mmm_ready_max_zero_week_share') }}
              then 1 else 0 end                                         as flag_sparse,

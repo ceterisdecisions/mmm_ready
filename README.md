@@ -53,7 +53,7 @@ BigQuery export instead: see [GA4 / Firebase adapter](#ga4--firebase-adapter-big
 ## Channel taxonomy
 `seeds/channel_taxonomy.csv` maps each `(platform, campaign_type)` pair to an MMM channel.
 Spend with no match lands in `unmapped`, and the readiness report blocks it above the
-`mmm_ready_max_unmapped_share` threshold.
+`mmm_ready_max_unmapped_share` threshold (see [Readiness thresholds](#readiness-thresholds)).
 
 | column | meaning |
 |---|---|
@@ -123,6 +123,42 @@ build. If a downstream job expects a fixed schema, set `mmm_ready_pivot_all_chan
 Which edge weeks are partial depends on `mmm_ready_week_start` (see Notes).
 
 The readiness report always reads the full, untrimmed data.
+
+## Readiness thresholds
+Every check in `mmm_readiness_report` compares one column of the report with an `mmm_ready_*` var.
+The defaults live in the package's root `dbt_project.yml`; override them under `vars:` in your own
+project or with `--vars`. **The defaults are heuristics, not statistical standards**: none of them
+comes from a measured study. Each one is an initial heuristic, adjustable. Tune them to your data
+and your model, and don't read a `ready` as proof that a channel can be estimated.
+
+An **issue** that blocks makes the channel `blocked`. A **review** issue makes it `review`. A
+**warning** is informational and never changes `readiness_status`. All comparisons are strict
+(`>` or `<`) except collinearity, which uses `>=`.
+
+| var | default | what it checks (report column) | severity | when to change it |
+|---|---|---|---|---|
+| `mmm_ready_min_history_weeks` | `104` | `flag_short_history` when `expected_weeks < 104` | issue (blocking) | If your model or your business cycle needs more or less history. The value used is stored in the `min_history_weeks` column. |
+| `mmm_ready_max_unmapped_share` | `0.02` | `flag_unmapped_spend` when the `spend_share` of `unmapped` is `> 0.02` | issue (blocking) | If you accept more spend outside the taxonomy, or want zero tolerance. The better fix is usually to extend `channel_taxonomy.csv`. |
+| `mmm_ready_max_kpi_missing_weeks` | `0` | `flag_kpi_gaps` when `kpi_missing_weeks > 0` (weeks with no revenue between the first and last week of spend) | issue (blocking) | If your model handles a few missing KPI weeks (for example by imputation) and you prefer not to block on them. |
+| `mmm_ready_max_platform_gap_weeks` | `0` | `flag_platform_gaps` when `max_platform_gap_weeks > 0`: the largest gap of any single platform, in weeks with no rows between its first and last active week | review | If some platforms pause by design (flighting, seasonal campaigns) and you have confirmed that the gaps are not data loss. |
+| `mmm_ready_max_zero_week_share` | `0.5` | `flag_sparse` when `zero_week_share > 0.5` (share of complete weeks without spend) | review | If you model occasional channels on purpose, or want to flag them earlier. |
+| `mmm_ready_min_cv` | `0.1` | `flag_low_variance` when `cv_weekly_spend < 0.1` (weekly spend std / mean, complete weeks) | review | If your always-on channels are flagged and you already calibrate them with experiments, or to flag more of them. |
+| `mmm_ready_max_spike_ratio` | `5` | `flag_spike` when `spike_ratio > 5` (max week / mean week, complete weeks) | review | If your spend has planned bursts (launches, seasonal peaks) and you have checked them against billing. |
+| `mmm_ready_max_corr` | `0.8` | `flag_collinear` when `max_abs_corr_with_other >= 0.8` (abs weekly spend correlation with any other channel, complete weeks, `unmapped` excluded); same `>=` in `mmm_channel_correlations.is_collinear` | review | If your model groups or regularizes correlated channels, or to catch weaker correlations. |
+| — | — | `warn_kpi_from_analytics = 1` when `mmm_ready_outcomes_source` is `ga4` or `firebase` (see [Readiness warning](#readiness-warning)) | warning | It has no threshold: it depends only on where the KPI comes from. |
+
+Notes:
+- A channel's gap is measured per platform: `flag_platform_gaps` compares the largest gap of any of
+  its platforms (`max_platform_gap_weeks`) with the threshold. `gap_weeks` is the sum of the gaps of
+  all its platforms and is informational only.
+- Partial weeks are not a threshold. A first or last week with fewer than 7 days is partial by
+  definition and is fixed in the code. Per-week statistics (sparsity, variance, spikes,
+  correlations) skip those weeks.
+
+```yaml
+vars:
+  mmm_ready_max_platform_gap_weeks: 4   # e.g. TV is flighted: accept pauses of up to 4 weeks
+```
 
 ## GA4 / Firebase adapter (BigQuery only)
 An optional adapter builds `outcomes_daily` (date, geo, revenue, conversions) from the GA4 BigQuery

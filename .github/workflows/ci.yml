@@ -19,6 +19,10 @@ jobs:
       # The raw tables are sources, so dbt doesn't order them after their seeds: reloading
       # them inside build races with the staging models. They were loaded by dbt seed above.
       - run: dbt build --exclude "package:mmm_ready_integration_tests,resource_type:seed"
+      # Readiness thresholds only affect the diagnostics: rebuild them (and their tests) with
+      # overrides. Runs before the next build, which leaves the DuckDB file the MCP tests read.
+      - name: dbt build diagnostics (threshold overrides)
+        run: "dbt build --select mmm_channel_correlations+ --exclude 'package:mmm_ready_integration_tests,resource_type:seed' --vars '{mmm_ready_it_threshold_overrides: true, mmm_ready_min_history_weeks: 158, mmm_ready_max_unmapped_share: 0.10, mmm_ready_max_platform_gap_weeks: 3, mmm_ready_max_spike_ratio: 8, mmm_ready_max_corr: 0.6}'"
       - name: dbt build (non-default vars)
         run: "dbt build --exclude 'package:mmm_ready_integration_tests,resource_type:seed' --vars '{mmm_ready_drop_partial_weeks: false, mmm_ready_pivot_all_channels: true, mmm_ready_week_start: sunday}'"
       # The GA4/Firebase adapter is the one BigQuery-only part: it must refuse other targets.
