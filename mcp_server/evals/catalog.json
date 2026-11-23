@@ -1,0 +1,96 @@
+{
+  "_comment": "MCP evals: questions a user or agent asks the mmm-readiness server, with the expected answer. Checks live in mcp_server/tests/test_evals.py (one test per id). Values derived from ground_truth.json are computed at test time (mcp_server/evals/truth.py); only 'baseline' values are pinned here, and none of them depends on the build's week start. Keep the README table (mcp_server/README.md, Evals) in sync: a test compares the ids.",
+  "questions": [
+    {
+      "id": "Q1",
+      "question": "Is my data ready for an MMM?",
+      "tools": ["readiness_summary"],
+      "expected": "No: ready_for_modeling is false; 7 channels, 1 ready, 5 review, 1 blocked.",
+      "source": "baseline",
+      "baseline": {"total_channels": 7, "counts_by_status": {"ready": 1, "review": 5, "blocked": 1}}
+    },
+    {
+      "id": "Q2",
+      "question": "What is blocking the model?",
+      "tools": ["readiness_summary", "channel_readiness"],
+      "expected": "Only unmapped, by unmapped_spend: action 'fix the data', next step points at channel_taxonomy.csv, and the share quoted is Pinterest's spend over total spend.",
+      "source": "ground truth (pinterest unmapped in taxonomy)"
+    },
+    {
+      "id": "Q3",
+      "question": "Which channels need review, and why?",
+      "tools": ["readiness_summary"],
+      "expected": "Exactly the channels and review issues in the baseline, which include the seeded TikTok gap, Meta spike and YouTube~TV collinearity.",
+      "source": "baseline + ground truth",
+      "baseline": {
+        "needs_review": {
+          "search_brand": ["low_variance"],
+          "social_prospecting": ["platform_gaps", "spike"],
+          "social_retargeting": ["low_variance"],
+          "tv": ["platform_gaps", "collinear"],
+          "video_online": ["platform_gaps", "collinear"]
+        }
+      }
+    },
+    {
+      "id": "Q4",
+      "question": "What is wrong with TikTok (social_prospecting)?",
+      "tools": ["channel_readiness"],
+      "expected": "Status review; platform_gaps naming tiktok, with the number of complete weeks inside the seeded gap (computed from the build's week start); spike flagged (seeded Meta x10 week).",
+      "source": "ground truth"
+    },
+    {
+      "id": "Q5",
+      "question": "Why are TV and YouTube flagged?",
+      "tools": ["channel_readiness"],
+      "expected": "Both review and collinear with each other only (tv <-> video_online), recommended action 'validate with an experiment'.",
+      "source": "ground truth (youtube collinear with tv)"
+    },
+    {
+      "id": "Q6",
+      "question": "Where is Pinterest?",
+      "tools": ["channel_readiness", "list_channels"],
+      "expected": "channel_readiness('pinterest') is a tool error listing the valid channels; Pinterest's spend is the unmapped channel's total_spend.",
+      "source": "ground truth (pinterest unmapped in taxonomy)"
+    },
+    {
+      "id": "Q7",
+      "question": "Is the history long enough?",
+      "tools": ["readiness_summary", "channel_readiness"],
+      "expected": "Yes: no channel has a short_history issue.",
+      "source": "baseline",
+      "limited": "Absence of the flag only: the tools do not return expected_weeks or min_history_weeks unless short_history is flagged."
+    },
+    {
+      "id": "Q8",
+      "question": "Where does the KPI come from?",
+      "tools": ["readiness_summary", "channel_readiness"],
+      "expected": "No warnings anywhere, i.e. the KPI is not from GA4/Firebase.",
+      "source": "baseline (synthetic KPI = raw backend data)",
+      "limited": "Absence of the warning only: the tools do not return kpi_source unless warn_kpi_from_analytics is set."
+    },
+    {
+      "id": "Q9",
+      "question": "Which channels are ready to model as they are?",
+      "tools": ["list_channels"],
+      "expected": "Only search_nonbrand.",
+      "source": "baseline",
+      "baseline": {"ready": ["search_nonbrand"]}
+    },
+    {
+      "id": "Q10",
+      "question": "How much does each channel spend?",
+      "tools": ["list_channels"],
+      "expected": "The channel list is the ground-truth channels mapped through the taxonomy; each total_spend matches ground truth (relative tolerance 1e-6); spend shares sum to 1.",
+      "source": "ground truth",
+      "limited": "social_prospecting is excluded from the spend match: ground_truth.json counts TikTok spend inside the seeded gap, whose rows the generator then drops from the CSV."
+    },
+    {
+      "id": "Q11",
+      "question": "What is TV's ROI / contribution?",
+      "tools": ["list_tools", "readiness_summary", "list_channels", "channel_readiness"],
+      "expected": "Not answerable: no tool offers ROI or contribution, and no output carries such a field or any ground-truth ROI/contribution figure.",
+      "source": "ground truth (roi, contribution)"
+    }
+  ]
+}
