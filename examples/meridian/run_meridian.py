@@ -6,24 +6,35 @@ Meridian model (revenue KPI, impressions_* as media, spend_* as media spend,
 avg_price / promo_days / holiday_days as controls) and compares the estimated ROI
 per mmm_channel against ground_truth.json, aggregated through the channel taxonomy.
 The fitted model is saved to output/model.binpb for response_curves.py and
-optimize_budget.py, so they don't have to refit.
+optimize_budget.py, so they don't have to refit. Convergence diagnostics (R-hat, ESS,
+divergences) go to output/convergence.csv and the verdict to output/run_config.json; they
+are reported only, the sampling settings are never changed based on them.
 
 This is an example, not a test: it is not run in CI.
 
 Usage (from the repo root, after `dbt build` in integration_tests/):
-    python examples/meridian/run_meridian.py            # quick smoke run, a few minutes on CPU
+    python examples/meridian/run_meridian.py            # quick smoke run (sampling time not measured)
     python examples/meridian/run_meridian.py --full     # full sampling (use a GPU)
+
+Sampling time (sampling_seconds: sample_prior + sample_posterior only), a single run: full 1124 s,
+measured on Colab with a GPU (cuda:0); T4 runtime selected by the author, not recorded in
+run_config.json. Quick and CPU times are not measured.
 """
 import argparse
+import json
+import os
+import subprocess
 import sys
 import time
 from pathlib import Path
 
 import duckdb
+import numpy as np
 import pandas as pd
 
-from common import (DEFAULT_OUT, DEFAULT_TRUTH, MODEL_FILE, REPO_ROOT, add_coverage, load_truth, print_table,
-                    summarize_draws)
+from common import (CONVERGENCE_FILE, DEFAULT_OUT, DEFAULT_TRUTH, ESS_MIN, MERIDIAN_RHAT, MODEL_FILE, REPO_ROOT,
+                    RHAT_STRICT, RUN_CONFIG_FILE, VERDICT_TEXT, add_coverage, convergence_verdict, load_truth,
+                    print_table, summarize_draws)
 
 DEFAULT_DB = REPO_ROOT / "integration_tests" / "mmm_ready_dev.duckdb"
 DEFAULT_TAXONOMY = REPO_ROOT / "seeds" / "channel_taxonomy.csv"
@@ -80,6 +91,85 @@ def media_channels(df: pd.DataFrame) -> list[str]:
     return channels
 
 
+def check_media(df: pd.DataFrame, channels: list[str]):
+    """Stop on all-zero media columns: a build with mmm_ready_pivot_all_channels: true leaves them in."""
+    zero = [c for ch in channels for c in (f"spend_{ch}", f"impressions_{ch}") if df[c].fillna(0).eq(0).all()]
+    if zero:
+        sys.exit(f"All-zero media columns: {zero}. Rebuild mmm_input_weekly with the default vars "
+                 "(`dbt build` in integration_tests/, no --vars) before fitting.")
+
+
+def convergence_table(mmm, an) -> tuple[pd.DataFrame, int]:
+    """Per-parameter R-hat (Meridian's classic and arviz rank-normalized), ESS bulk/tail, plus divergences."""
+    import warnings
+
+    import arviz as az
+
+    posterior = mmm.inference_data.posterior
+    # Constant parameters (fixed by the model spec, e.g. slope_m with Hill slope pinned at 1) have no
+    # R-hat and a meaningless ESS: mark them and leave them out of the verdict.
+    constant = {name for name in posterior.data_vars if float(posterior[name].std()) == 0.0}
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        rank = az.rhat(posterior, method="rank")
+        bulk = az.ess(posterior, method="bulk")
+        tail = az.ess(posterior, method="tail")
+    classic = an.get_rhat()
+
+    def worst(ds, name, fn):
+        vals = np.asarray(ds[name]).ravel()
+        vals = vals[~np.isnan(vals)]
+        return float(fn(vals)) if vals.size else float("nan")
+
+    rows = []
+    for name in posterior.data_vars:
+        if name in constant:
+            rows.append({"parameter": name, "constant": True})
+            continue
+        meridian_vals = np.asarray(classic[name]).ravel() if name in classic else np.array([np.nan])
+        meridian_vals = meridian_vals[~np.isnan(meridian_vals)]
+        rows.append({
+            "parameter": name,
+            "max_rhat_meridian": float(meridian_vals.max()) if meridian_vals.size else float("nan"),
+            "max_rhat_rank": worst(rank, name, np.max),
+            "min_ess_bulk": worst(bulk, name, np.min),
+            "min_ess_tail": worst(tail, name, np.min),
+            "constant": False,
+        })
+    table = pd.DataFrame(rows)
+    table["size"] = [int(np.prod([posterior[n].sizes[d] for d in posterior[n].dims if d not in ("chain", "draw")]))
+                     for n in table["parameter"]]
+    table["fails_strict"] = ((table["max_rhat_rank"] > RHAT_STRICT) | (table["min_ess_bulk"] < ESS_MIN)
+                             | (table["min_ess_tail"] < ESS_MIN))
+    table = table.sort_values("max_rhat_rank", ascending=False, na_position="last").reset_index(drop=True)
+    divergences = int(np.asarray(mmm.inference_data.sample_stats["diverging"]).sum())
+    return table, divergences
+
+
+def library_versions() -> dict:
+    from importlib.metadata import PackageNotFoundError, version
+
+    out = {}
+    for pkg in ("google-meridian", "jax", "tensorflow", "tensorflow-probability", "tfp-nightly", "arviz"):
+        try:
+            out[pkg] = version(pkg)
+        except PackageNotFoundError:
+            pass
+    return out
+
+
+def git_info() -> dict:
+    """Commit and branch of the repo checkout; None when git or the repo is unavailable."""
+    out = {}
+    for key, cmd in (("git_commit", ["rev-parse", "HEAD"]), ("git_branch", ["rev-parse", "--abbrev-ref", "HEAD"])):
+        try:
+            out[key] = subprocess.run(["git", "-C", str(REPO_ROOT), *cmd], capture_output=True, text=True,
+                                      check=True).stdout.strip()
+        except (OSError, subprocess.CalledProcessError):
+            out[key] = None
+    return out
+
+
 def build_input_data(df: pd.DataFrame, channels: list[str]):
     from meridian.data import load
 
@@ -133,6 +223,7 @@ def main():
 
     df = load_weekly(args.db, args.table)
     channels = media_channels(df)
+    check_media(df, channels)
     print(f"Loaded {len(df)} rows: {df['geo'].nunique()} geos, {df['week_start'].nunique()} weeks "
           f"({df['week_start'].min():%Y-%m-%d} .. {df['week_start'].max():%Y-%m-%d})")
     print(f"Media channels: {', '.join(channels)}")
@@ -150,7 +241,8 @@ def main():
     t0 = time.time()
     mmm.sample_prior(n_prior, seed=args.seed)
     mmm.sample_posterior(n_chains=n_chains, n_adapt=n_adapt, n_burnin=n_burnin, n_keep=n_keep, seed=args.seed)
-    print(f"Sampling done in {time.time() - t0:.0f}s")
+    elapsed = time.time() - t0
+    print(f"Sampling done in {elapsed:.0f}s")
 
     from meridian.schema.serde import meridian_serde
 
@@ -165,15 +257,51 @@ def main():
     cmp = truth[["mmm_channel", "true_roi"]].merge(est, on="mmm_channel", how="outer")
     cmp = add_coverage(cmp, "true_roi", "roi").sort_values("mmm_channel").reset_index(drop=True)
 
-    rhat = an.rhat_summary()
-    max_rhat = float(rhat["max_r_hat"].max())
-
     print_table("ROI per mmm_channel (estimated vs ground truth):", cmp)
-    print(f"\nMax R-hat across parameters: {max_rhat:.2f} (quick runs rarely converge; use --full for real numbers)")
-
     out_file = args.out / "roi_comparison.csv"
     cmp.to_csv(out_file, index=False)
     print(f"Written {out_file}")
+
+    # Convergence: reported, never acted on (no resampling, no setting changes).
+    conv, divergences = convergence_table(mmm, an)
+    worst = {
+        "max_rhat_meridian": float(conv["max_rhat_meridian"].max()),
+        "max_rhat_rank": float(conv["max_rhat_rank"].max()),
+        "min_ess_bulk": float(conv["min_ess_bulk"].min()),
+        "min_ess_tail": float(conv["min_ess_tail"].min()),
+        "divergences": divergences,
+    }
+    verdict = convergence_verdict(worst["max_rhat_rank"], worst["min_ess_bulk"], worst["min_ess_tail"],
+                                  divergences, worst["max_rhat_meridian"])
+    conv.to_csv(args.out / CONVERGENCE_FILE, index=False)
+    failing = conv[conv["fails_strict"]]
+    print_table(f"Convergence per parameter ({len(failing)} of {len(conv)} fail the strict criterion):",
+                conv.head(15))
+    print(f"\nWorst values: R-hat rank-normalized {worst['max_rhat_rank']:.3f} (<= {RHAT_STRICT}), "
+          f"R-hat Meridian {worst['max_rhat_meridian']:.3f} (< {MERIDIAN_RHAT}), "
+          f"ESS bulk {worst['min_ess_bulk']:.0f} / tail {worst['min_ess_tail']:.0f} (>= {ESS_MIN}), "
+          f"divergences {divergences} (= 0)")
+    print(f"Convergence: {VERDICT_TEXT[verdict]}")
+
+    import jax
+
+    run_config = {
+        "preset": "full" if args.full else "quick",
+        "n_chains": n_chains, "n_adapt": n_adapt, "n_burnin": n_burnin, "n_keep": n_keep, "n_prior": n_prior,
+        "knots": args.knots,
+        "seed": args.seed, "seed_source": "--seed argument, passed to sample_prior and sample_posterior",
+        "sampling_seconds": round(elapsed, 1),
+        **git_info(),
+        "meridian_backend": os.environ.get("MERIDIAN_BACKEND"),  # None: not set, Meridian's default
+        "jax_enable_x64": bool(jax.config.jax_enable_x64),
+        "jax_devices": [str(d) for d in jax.devices()], "jax_device_kind": jax.devices()[0].device_kind,
+        "versions": library_versions(),
+        "n_geos": int(df["geo"].nunique()), "n_weeks": int(df["week_start"].nunique()), "channels": channels,
+        "thresholds": {"rhat_rank_max": RHAT_STRICT, "ess_min": ESS_MIN, "rhat_meridian_max": MERIDIAN_RHAT},
+        "worst": worst, "parameters_failing_strict": failing["parameter"].tolist(), "verdict": verdict,
+    }
+    (args.out / RUN_CONFIG_FILE).write_text(json.dumps(run_config, indent=2))
+    print(f"Written {args.out / CONVERGENCE_FILE} and {args.out / RUN_CONFIG_FILE}")
 
 
 if __name__ == "__main__":

@@ -12,3 +12,4 @@ integration_tests/ground_truth.json
 .DS_Store
 __pycache__/
 integration_tests/guard.log
+examples/meridian/output_quick/
