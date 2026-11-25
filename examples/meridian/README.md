@@ -26,7 +26,8 @@ This is an example, not a test, so CI does not run it.
      channels are detected from the `spend_*` columns. `spend_unmapped` is left out.
    - Controls: `avg_price`, `promo_days`, `holiday_days`.
    - Population: a constant 1 per geo, because the synthetic panel has no population data.
-3. Samples the prior and the posterior. The default quick preset finishes in a few minutes on CPU.
+3. Samples the prior and the posterior. See [Sampling time](#sampling-time) for what has been
+   measured.
 4. Builds the true ROI per `mmm_channel`. It maps each `platform/campaign_type` key in
    `ground_truth.json` through `seeds/channel_taxonomy.csv`, then computes
    `sum(contribution) / sum(spend)` per channel. For example, `social_prospecting` combines
@@ -132,8 +133,23 @@ slope at 1 by default) have no R-hat and are left out. The verdict is:
 Only **converged** counts as converged: under the other two verdicts the ROI, mROI and budget
 numbers are not reliable estimates. The diagnostics are reported only. The scripts never resample
 or change priors, chains, knots or data based on them. `convergence.csv` lists every parameter,
-and `run_config.json` stores the sampling settings, seed, library versions, JAX devices,
-sampling time and the verdict.
+and `run_config.json` stores the sampling settings, the `--seed` argument (`seed`, passed to both
+`sample_prior` and `sample_posterior`), the git commit and branch, `MERIDIAN_BACKEND` (`null` when
+unset), whether JAX runs in x64 mode, library versions, JAX devices and the first device's kind
+(`jax_device_kind`, e.g. the GPU model), sampling time and the verdict.
+
+### Sampling time
+
+`sampling_seconds` in `run_config.json` covers `sample_prior` plus `sample_posterior` only, not
+loading data, saving the model or the diagnostics. Measured so far:
+
+| Preset | Sampling time | Where |
+|---|---|---|
+| quick | not measured | |
+| full | 1124 s | measured on Colab with a GPU (`cuda:0`); T4 runtime selected by the author, not recorded in `run_config.json`. Source: the `run_config.json` of the Colab run |
+
+That is a single run. CPU time has not been measured, and whether a rerun with the same seed
+gives the same draws has not been checked.
 
 ### Validation against the truth
 
@@ -171,9 +187,9 @@ deactivate && cd ..
 python3.12 -m venv .venv-meridian
 .venv-meridian/bin/pip install -r examples/meridian/requirements.txt
 
-# 3. Quick smoke run (about 1-2 minutes on a laptop CPU)
+# 3. Quick smoke run (CPU time not measured; see "Sampling time")
 .venv-meridian/bin/python examples/meridian/run_meridian.py
-#    or a full run (much slower on CPU; a GPU is recommended)
+#    or a full run (CPU time not measured; a GPU is recommended)
 .venv-meridian/bin/python examples/meridian/run_meridian.py --full
 
 # 4. Curves, budget optimizer and validation report on the saved model (seconds each)
@@ -197,15 +213,15 @@ The notebook:
 1. clones `https://github.com/ceterisdecisions/mmm_ready.git` at `BRANCH` (default `main`),
 2. generates the synthetic data and runs `dbt build` with the default vars,
 3. installs `google-meridian[and-cuda,schema]==2.2.0`,
-4. runs a quick fit as a timing reference (into `output_quick/`, not validated),
+4. runs a quick fit (into `output_quick/`, not validated),
 5. runs `run_meridian.py --full`, `response_curves.py`, `optimize_budget.py` and `validate.py`,
-6. shows the report and plots and downloads `output/` as a zip.
+6. shows the report and plots and downloads a zip with `output/` and
+   `output_quick/run_config.json` when it exists.
 
 It needs no credentials: the repo is public and the data is generated in the runtime. If pip
 reports dependency conflicts with Colab's preinstalled packages, restart the session
 (**Runtime → Restart session**) after the Meridian install and continue from the next cell.
-The full run's duration hasn't been measured yet; use the quick run's sampling time
-(4 chains × 2000 steps vs 2 chains × 600) as a rough guide.
+For the sampling time measured so far, see [Sampling time](#sampling-time).
 
 ## Reading the results
 
@@ -230,6 +246,13 @@ distort the comparison in predictable ways, and that is the point of the example
   recommendation the wrong way. In particular, the TV/YouTube collinearity makes Meridian
   move budget from `tv` to `video_online`, the opposite of the true optimum. A quick run
   usually captures a negative share; judge the optimizer only on a converged `--full` run.
+- **TikTok gap in the truth:** the gap is a reporting gap. The generator keeps spending on
+  TikTok and adding its effect to revenue during 2024-09-02..2024-09-22, then drops those rows
+  from `ad_spend_daily`. `ground_truth.json` counts that spend and effect; the model sees no
+  TikTok spend in those weeks. Computing the true ROI over the modelled window (156 weeks,
+  2023-01-02..2025-12-28) using the spend the model sees moves `social_prospecting` from 0.698
+  to 0.702 (+0.57%). That figure combines the window cut and the gap, which were not measured
+  separately. Channels with no gap move by at most 0.09%, from the window cut alone.
 - **Window mismatch:** the true ROI is computed over the full generated period, but the model
   only sees the weeks kept in `mmm_input_weekly`, which drops partial edge weeks.
 - **Default priors:** the example uses Meridian's default ROI priors and has no calibration.

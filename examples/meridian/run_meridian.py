@@ -13,11 +13,17 @@ are reported only, the sampling settings are never changed based on them.
 This is an example, not a test: it is not run in CI.
 
 Usage (from the repo root, after `dbt build` in integration_tests/):
-    python examples/meridian/run_meridian.py            # quick smoke run, a few minutes on CPU
+    python examples/meridian/run_meridian.py            # quick smoke run (sampling time not measured)
     python examples/meridian/run_meridian.py --full     # full sampling (use a GPU)
+
+Sampling time (sampling_seconds: sample_prior + sample_posterior only), a single run: full 1124 s,
+measured on Colab with a GPU (cuda:0); T4 runtime selected by the author, not recorded in
+run_config.json. Quick and CPU times are not measured.
 """
 import argparse
 import json
+import os
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -152,6 +158,18 @@ def library_versions() -> dict:
     return out
 
 
+def git_info() -> dict:
+    """Commit and branch of the repo checkout; None when git or the repo is unavailable."""
+    out = {}
+    for key, cmd in (("git_commit", ["rev-parse", "HEAD"]), ("git_branch", ["rev-parse", "--abbrev-ref", "HEAD"])):
+        try:
+            out[key] = subprocess.run(["git", "-C", str(REPO_ROOT), *cmd], capture_output=True, text=True,
+                                      check=True).stdout.strip()
+        except (OSError, subprocess.CalledProcessError):
+            out[key] = None
+    return out
+
+
 def build_input_data(df: pd.DataFrame, channels: list[str]):
     from meridian.data import load
 
@@ -270,8 +288,14 @@ def main():
     run_config = {
         "preset": "full" if args.full else "quick",
         "n_chains": n_chains, "n_adapt": n_adapt, "n_burnin": n_burnin, "n_keep": n_keep, "n_prior": n_prior,
-        "knots": args.knots, "seed": args.seed, "sampling_seconds": round(elapsed, 1),
-        "jax_devices": [str(d) for d in jax.devices()], "versions": library_versions(),
+        "knots": args.knots,
+        "seed": args.seed, "seed_source": "--seed argument, passed to sample_prior and sample_posterior",
+        "sampling_seconds": round(elapsed, 1),
+        **git_info(),
+        "meridian_backend": os.environ.get("MERIDIAN_BACKEND"),  # None: not set, Meridian's default
+        "jax_enable_x64": bool(jax.config.jax_enable_x64),
+        "jax_devices": [str(d) for d in jax.devices()], "jax_device_kind": jax.devices()[0].device_kind,
+        "versions": library_versions(),
         "n_geos": int(df["geo"].nunique()), "n_weeks": int(df["week_start"].nunique()), "channels": channels,
         "thresholds": {"rhat_rank_max": RHAT_STRICT, "ess_min": ESS_MIN, "rhat_meridian_max": MERIDIAN_RHAT},
         "worst": worst, "parameters_failing_strict": failing["parameter"].tolist(), "verdict": verdict,
